@@ -1,0 +1,2307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#4fb3ff">
+<title>Doodle Ball</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script>
+  try {
+    var s = JSON.parse(localStorage.getItem('doodleBallSave_v3') || 'null');
+    document.documentElement.dataset.theme = (s && s.settings && s.settings.theme) || 'light';
+  } catch (e) { document.documentElement.dataset.theme = 'light'; }
+</script>
+<style>
+  :root {
+    --font: "Noto Sans", "Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;
+    --text: #17406f;
+    --ink: #1d4f9c;
+    --accent: #2a6fc0;
+    --onaccent: #ffffff;
+    --panel: rgba(255, 255, 255, 0.92);
+    --sel: #dcebff;
+    --sky1: #5db8ff;
+    --sky2: #dff3ff;
+    --cloud: rgba(255, 255, 255, 0.95);
+    --ok: #2f9e55;
+    --c0: #2f9e55; --c1: #1c7ed6; --c2: #e8710a; --c3: #c92a2a;
+  }
+  [data-theme="dark"] {
+    --text: #e8ecff;
+    --ink: #c3ceff;
+    --accent: #8fa2ff;
+    --onaccent: #0b1030;
+    --panel: rgba(20, 26, 64, 0.92);
+    --sel: #2c3573;
+    --sky1: #080c27;
+    --sky2: #2a2f6b;
+    --cloud: rgba(140, 150, 225, 0.22);
+    --c0: #5ee08f; --c1: #6bb6ff; --c2: #ffa94d; --c3: #ff7b7b;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: linear-gradient(var(--sky1), var(--sky2));
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    font-family: var(--font);
+    color: var(--text);
+  }
+  canvas#game { display: block; touch-action: none; cursor: crosshair; -webkit-tap-highlight-color: transparent; }
+  html:not([data-view="mobile"]) canvas#game { width: min(100vw, 160vh); aspect-ratio: 960 / 600; }
+  html[data-view="mobile"] canvas#game { position: fixed; left: 0; top: 0; width: 100vw; height: 100vh; height: 100dvh; }
+  #safeprobe {
+    position: fixed; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* ---------- sky + clouds (menu / loader backgrounds) ---------- */
+  .sky { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: linear-gradient(var(--sky1), var(--sky2)); }
+  .cloud {
+    position: absolute; left: 0; width: 150px; height: 46px; background: var(--cloud);
+    border-radius: 46px; animation: drift linear infinite; opacity: 0.95;
+  }
+  .cloud::before, .cloud::after { content: ""; position: absolute; background: var(--cloud); border-radius: 50%; }
+  .cloud::before { width: 64px; height: 64px; top: -32px; left: 22px; }
+  .cloud::after  { width: 86px; height: 86px; top: -46px; left: 64px; }
+  @keyframes drift { from { transform: translateX(-240px); } to { transform: translateX(calc(100vw + 240px)); } }
+
+  /* ---------- menu ---------- */
+  #menu { position: fixed; inset: 0; display: none; overflow-y: auto; z-index: 10; }
+  #menu.open { display: block; }
+  .panel { position: relative; z-index: 1; width: min(780px, 94vw); margin: 0 auto; padding: 18px 0 40px; }
+  h1 { margin: 6px 0 14px; font-size: 36px; font-weight: 700; color: var(--ink); text-align: center; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.15); }
+  h2 { margin: 22px 0 10px; font-size: 18px; font-weight: 700; color: var(--ink); }
+
+  button { font-family: var(--font); color: var(--ink); cursor: pointer; }
+  .tabs { display: flex; gap: 8px; justify-content: center; margin-bottom: 16px; }
+  .tab {
+    flex: 1; max-width: 200px; padding: 10px 6px; font-size: 17px; font-weight: 700;
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 14px;
+  }
+  .tab.sel { background: var(--accent); color: var(--onaccent); }
+  .tabpane[hidden] { display: none; }
+
+  .chapters { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .chap {
+    display: flex; flex-direction: column; align-items: center; gap: 2px;
+    padding: 10px 4px; background: var(--panel); border: 2px solid var(--accent); border-radius: 14px;
+  }
+  .chap b { font-size: 12px; font-weight: 600; color: var(--text); opacity: 0.8; }
+  .chap span { font-size: 18px; font-weight: 700; }
+  .chap small { font-size: 12px; color: var(--text); opacity: 0.8; }
+  .chap.sel { background: var(--sel); box-shadow: 0 0 0 3px var(--accent) inset; }
+  .chap[data-ch="0"] span { color: var(--c0); }
+  .chap[data-ch="1"] span { color: var(--c1); }
+  .chap[data-ch="2"] span { color: var(--c2); }
+  .chap[data-ch="3"] span { color: var(--c3); }
+
+  .levelgrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-top: 16px; }
+  .lvl {
+    position: relative; aspect-ratio: 1.3; font-size: 21px; font-weight: 700;
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 14px;
+  }
+  .lvl:hover, .chap:hover, .card:hover, .seg button:hover { background: var(--sel); }
+  .lvl.done { border-color: var(--ok); color: var(--ok); }
+  .lvl.done::after { content: "\2713"; position: absolute; top: 2px; right: 8px; font-size: 14px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+  .card {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 10px 6px; background: var(--panel); border: 2px solid var(--accent); border-radius: 14px;
+    font-size: 14px; font-weight: 600;
+  }
+  .card.sel { background: var(--sel); box-shadow: 0 0 0 3px var(--accent) inset; }
+  .card canvas { width: 64px; height: 64px; }
+  .swatch { width: 64px; height: 28px; border-radius: 14px; border: 2px solid var(--accent); display: block; }
+  #doodlepreview {
+    display: block; margin: 14px auto 0; width: min(100%, 360px); height: 80px;
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 14px;
+  }
+
+  .row {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 14px 16px; margin-bottom: 10px; background: var(--panel);
+    border: 2px solid var(--accent); border-radius: 14px; font-size: 17px; font-weight: 700; color: var(--ink);
+  }
+  .row small { display: block; font-size: 12px; font-weight: 400; color: var(--text); opacity: 0.85; margin-top: 3px; max-width: 340px; }
+  .seg { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  .seg button {
+    padding: 8px 14px; font-size: 14px; font-weight: 700;
+    background: transparent; border: 2px solid var(--accent); border-radius: 10px;
+  }
+  .seg button.sel { background: var(--accent); color: var(--onaccent); }
+
+  .resume {
+    display: block; margin: 22px auto 0; padding: 12px 34px; font-size: 19px; font-weight: 700;
+    background: var(--ok); color: #fff; border: 0; border-radius: 14px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+  }
+
+  /* ---------- loading screen ---------- */
+  #loader {
+    position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; transition: opacity 0.25s;
+  }
+  #loader.hide { opacity: 0; pointer-events: none; }
+  #loader h1 { position: relative; z-index: 1; font-size: 46px; margin-bottom: 26px; }
+  .loadbox { position: relative; z-index: 1; width: min(420px, 80vw); text-align: center; }
+  .track { height: 18px; border-radius: 9px; background: rgba(255, 255, 255, 0.35); border: 2px solid var(--accent); overflow: hidden; }
+  [data-theme="dark"] .track { background: rgba(0, 0, 0, 0.35); }
+  #loadFill { height: 100%; width: 0%; border-radius: 7px; background: linear-gradient(90deg, #4dabf7, #2f9e55); }
+  #loadPct { margin-top: 8px; font-size: 14px; font-weight: 700; color: var(--ink); }
+  #loadMsg { margin-top: 4px; font-size: 18px; font-weight: 600; color: var(--text); }
+
+  /* ---------- "Making changes" spinner ---------- */
+  #busy {
+    position: fixed; inset: 0; z-index: 150; display: none; flex-direction: column;
+    align-items: center; justify-content: center; background: rgba(8, 14, 40, 0.5);
+  }
+  #busy.show { display: flex; }
+  #busy p { margin: 18px 0 0; font-size: 18px; font-weight: 600; color: #fff; }
+  .spinner { position: relative; width: 68px; height: 68px; }
+  .spinner i {
+    position: absolute; left: 50%; top: 50%; width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px;
+    border-radius: 50%; background: #fff;
+    transform: rotate(calc(var(--i) * 45deg)) translateY(-27px);
+    animation: dotfade 0.8s linear infinite; animation-delay: calc(var(--i) * 0.1s - 0.8s);
+  }
+  @keyframes dotfade { 0% { opacity: 1; } 100% { opacity: 0.12; } }
+
+  /* ---------- coins, prices, buttons ---------- */
+  .coin {
+    display: inline-block; width: 16px; height: 16px; border-radius: 50%; vertical-align: -3px; margin-right: 5px;
+    background: radial-gradient(circle at 35% 30%, #fff3b0, #ffd23f 55%, #e0a21a); border: 2px solid #b8790a;
+  }
+  .coinbar { display: flex; justify-content: center; margin: -4px 0 12px; }
+  .coinbar span {
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 999px;
+    padding: 6px 18px; font-weight: 700; color: var(--ink); font-size: 16px;
+  }
+  .card.locked canvas, .card.locked .swatch { filter: grayscale(0.55) brightness(0.92); opacity: 0.8; }
+  .price { display: flex; align-items: center; font-size: 13px; font-weight: 700; color: var(--ink); }
+  .price.owned { color: var(--ok); }
+  .card small.sub { font-size: 11px; font-weight: 600; opacity: 0.85; text-align: center; margin-top: -3px; }
+  .btn { padding: 8px 16px; font-size: 15px; font-weight: 700; background: transparent; color: var(--ink); border: 2px solid var(--accent); border-radius: 10px; }
+  .btn:hover { background: var(--sel); }
+  .btn.red { border-color: #d94141; color: #d94141; }
+  [data-theme="dark"] .btn.red { border-color: #ff8a8a; color: #ff8a8a; }
+  .btn.primary { background: var(--ok); border-color: var(--ok); color: #fff; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: 26px; z-index: 400; max-width: 90vw; text-align: center;
+    transform: translate(-50%, 30px); opacity: 0; pointer-events: none; transition: all 0.3s;
+    background: var(--panel); color: var(--ink); border: 2px solid var(--accent); border-radius: 14px;
+    padding: 10px 18px; font-weight: 700; font-size: 15px;
+  }
+  #toast.show { opacity: 1; transform: translate(-50%, 0); }
+  #confirm {
+    position: fixed; inset: 0; z-index: 170; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 14, 40, 0.55);
+  }
+  #confirm.show { display: flex; }
+  .dialog {
+    width: min(340px, 86vw); background: var(--panel); border: 2px solid var(--accent); border-radius: 18px;
+    padding: 20px; text-align: center; color: var(--text);
+  }
+  [data-theme="light"] .dialog { background: #fff; }
+  .dialog h3 { margin: 0 0 8px; font-size: 20px; color: var(--ink); }
+  .dialog p { margin: 0 0 16px; font-size: 14px; }
+  .dialog .btns { display: flex; gap: 10px; justify-content: center; }
+
+  /* ---------- box opening animation ---------- */
+  .boxfx {
+    position: fixed; inset: 0; z-index: 180; display: none; align-items: center; justify-content: center; overflow: hidden;
+    background: radial-gradient(circle at 50% 45%, rgba(48, 84, 190, 0.92), rgba(6, 10, 36, 0.96));
+  }
+  .boxfx.show { display: flex; }
+  .stage { position: relative; width: 300px; height: 440px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .boxfx .rays {
+    position: absolute; top: 50%; left: 50%; width: 440px; height: 440px; margin: -260px 0 0 -220px; border-radius: 50%;
+    opacity: 0; pointer-events: none;
+    background: repeating-conic-gradient(rgba(255, 240, 170, 0.75) 0 7deg, transparent 7deg 22deg);
+    -webkit-mask-image: radial-gradient(circle, #000 14%, transparent 68%); mask-image: radial-gradient(circle, #000 14%, transparent 68%);
+  }
+  .boxfx.open .rays { animation: raysIn 1.5s ease-out forwards; }
+  @keyframes raysIn { 0% { opacity: 0; transform: scale(0.3) rotate(0); } 25% { opacity: 1; } 100% { opacity: 0.55; transform: scale(1.15) rotate(70deg); } }
+
+  .giftbox { position: relative; width: 140px; height: 130px; margin-top: 20px; cursor: pointer; animation: boxIdle 1.8s ease-in-out infinite; -webkit-tap-highlight-color: transparent; }
+  @keyframes boxIdle { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-9px) rotate(-1.5deg); } }
+  .giftbox .base {
+    position: absolute; left: 10px; right: 10px; bottom: 0; height: 80px; border-radius: 10px;
+    background: linear-gradient(#8fb8ff, #4f7fe0); border: 3px solid #2b4fa8;
+  }
+  .giftbox .lid {
+    position: absolute; left: 0; right: 0; top: 14px; height: 42px; border-radius: 12px; z-index: 2;
+    background: linear-gradient(#bcd6ff, #6c97ec); border: 3px solid #2b4fa8; transform-origin: left bottom;
+  }
+  .giftbox .base::after, .giftbox .lid::after {
+    content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 24px; margin-left: -12px;
+    background: #ffd84d; border-left: 3px solid #c99a00; border-right: 3px solid #c99a00;
+  }
+  .giftbox .lid::before {
+    content: ""; position: absolute; left: 50%; top: -24px; width: 34px; height: 26px; margin-left: -17px; z-index: 3;
+    border: 6px solid #ffd84d; border-bottom: 0; border-radius: 26px 26px 0 0; box-shadow: 0 0 0 2px #c99a00;
+  }
+  .boxfx.shaking .giftbox { animation: boxShake 0.75s ease-in-out forwards; }
+  @keyframes boxShake {
+    0% { transform: rotate(0); } 12% { transform: rotate(-9deg) scale(1.04); } 25% { transform: rotate(9deg) scale(1.06); }
+    38% { transform: rotate(-11deg) scale(1.08); } 52% { transform: rotate(11deg) scale(1.1); }
+    66% { transform: rotate(-7deg) scale(1.1); } 80% { transform: rotate(5deg) scale(1.12); } 100% { transform: rotate(0) scale(1.12); }
+  }
+  .boxfx.open .giftbox { animation: none; transform: scale(1.12); }
+  .boxfx.open .lid { animation: lidFly 0.7s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
+  @keyframes lidFly { 0% { transform: translateY(0) rotate(0); } 100% { transform: translateY(-130px) rotate(-28deg); opacity: 0; } }
+  .boxfx.reveal .giftbox { animation: boxAway 0.6s ease-in forwards; }
+  @keyframes boxAway { from { transform: scale(1.12); opacity: 1; } to { transform: translateY(130px) scale(0.7); opacity: 0; } }
+
+  .confetti { position: absolute; left: 50%; top: 50%; width: 0; height: 0; pointer-events: none; }
+  .confetti i { position: absolute; width: 8px; height: 14px; border-radius: 2px; opacity: 0; }
+  .boxfx.open .confetti i { animation: conf 1.2s ease-out forwards; animation-delay: var(--d); }
+  @keyframes conf { 0% { opacity: 1; transform: translate(0, 0) rotate(0); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) rotate(var(--rot)); } }
+
+  .cardwrap {
+    position: absolute; left: 50%; top: 50%; width: 200px; height: 270px; margin: -170px 0 0 -100px;
+    perspective: 900px; opacity: 0; pointer-events: none;
+  }
+  .boxfx.reveal .cardwrap { animation: cardRise 0.75s cubic-bezier(0.2, 1.3, 0.4, 1) forwards; }
+  @keyframes cardRise { 0% { opacity: 0; transform: translateY(100px) scale(0.25); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+  .cardinner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transform: rotateY(180deg); }
+  .boxfx.reveal .cardinner { animation: cardFlip 0.8s 0.85s ease-in-out forwards; }
+  @keyframes cardFlip { 0% { transform: rotateY(180deg) scale(1); } 50% { transform: rotateY(90deg) scale(1.1); } 100% { transform: rotateY(0) scale(1); } }
+  .cardface { position: absolute; inset: 0; border-radius: 18px; backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .cardback {
+    transform: rotateY(180deg); display: flex; align-items: center; justify-content: center;
+    font-size: 70px; font-weight: 700; color: #fff; border: 4px solid #bcd3ff;
+    background: repeating-linear-gradient(45deg, #2a4fb0 0 12px, #3a63c9 12px 24px);
+  }
+  .cardfront {
+    display: flex; flex-direction: column; align-items: center; padding: 12px 10px; color: #17406f;
+    background: linear-gradient(#ffffff, #e2ecff); border: 4px solid var(--rar, #8a97a8); position: absolute;
+  }
+  .cardfront .rar { padding: 3px 14px; border-radius: 999px; color: #fff; font-weight: 700; font-size: 13px; letter-spacing: 0.5px; }
+  .cardfront canvas { width: 100px; height: 100px; margin: 14px 0 6px; }
+  .cardfront .cname { font-size: 22px; font-weight: 700; }
+  .cardfront .ctype { font-size: 13px; opacity: 0.75; margin-top: 2px; }
+  .cardfront .newtag { position: absolute; top: -10px; right: -12px; background: #ff4d6d; color: #fff; font-weight: 700; font-size: 12px; padding: 4px 8px; border-radius: 8px; transform: rotate(12deg); }
+  #boxhint { position: absolute; bottom: 70px; margin: 0; color: #fff; font-weight: 700; font-size: 19px; animation: hintPulse 1.2s ease-in-out infinite; }
+  @keyframes hintPulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
+  .boxfx.shaking #boxhint, .boxfx.open #boxhint { opacity: 0; animation: none; }
+  .boxbtns { position: absolute; bottom: 10px; display: flex; gap: 10px; opacity: 0; pointer-events: none; transition: opacity 0.4s; }
+  .boxfx.done .boxbtns { opacity: 1; pointer-events: auto; }
+  .boxbtns .btn:not(.primary) { color: #fff; border-color: #fff; }
+
+  /* ---------- in-level settings panel ---------- */
+  #ingame { position: fixed; inset: 0; display: none; overflow-y: auto; z-index: 140; }
+  #ingame.open { display: block; }
+  .vol { display: flex; align-items: center; gap: 10px; }
+  .vol input[type="range"] { width: 150px; accent-color: var(--accent); }
+  .vol b { min-width: 44px; text-align: right; font-size: 14px; }
+
+  /* ---------- level / chapter complete pop-ups ---------- */
+  .popup {
+    position: fixed; inset: 0; z-index: 160; display: none; align-items: center; justify-content: center;
+    background: rgba(8, 14, 40, 0.42);
+  }
+  .popup.show { display: flex; }
+  .popup .prays {
+    position: absolute; top: 50%; left: 50%; width: 560px; height: 560px; margin: -280px 0 0 -280px; border-radius: 50%;
+    pointer-events: none; opacity: 0;
+    background: repeating-conic-gradient(rgba(255, 236, 150, 0.7) 0 7deg, transparent 7deg 22deg);
+    -webkit-mask-image: radial-gradient(circle, #000 10%, transparent 66%); mask-image: radial-gradient(circle, #000 10%, transparent 66%);
+  }
+  .popup.chapter .prays { opacity: 0.8; animation: raySpin 14s linear infinite; }
+  @keyframes raySpin { to { transform: rotate(360deg); } }
+  .pcard {
+    position: relative; width: min(340px, 88vw); padding: 46px 20px 18px; text-align: center; color: var(--text);
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 22px; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.35);
+    animation: popIn 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both;
+  }
+  [data-theme="light"] .pcard { background: #fff; }
+  @keyframes popIn { from { opacity: 0; transform: translateY(40px) scale(0.6); } to { opacity: 1; transform: none; } }
+  .pbadge {
+    position: absolute; left: 50%; top: -38px; width: 84px; height: 84px; margin-left: -42px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: radial-gradient(circle at 35% 30%, #fff3b0, #ffd23f 55%, #e0a21a); border: 4px solid #b8790a;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); animation: badgeBounce 1.2s ease-in-out infinite;
+  }
+  .pbadge svg { width: 46px; height: 46px; }
+  @keyframes badgeBounce { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-5px) scale(1.06); } }
+  .popup.chapter .pbadge { width: 100px; height: 100px; margin-left: -50px; top: -52px; }
+  .popup.chapter .pbadge svg { width: 58px; height: 58px; }
+  .pcard h2 { margin: 0 0 2px; font-size: 26px; color: var(--ink); }
+  .popup.chapter .pcard h2 { font-size: 29px; }
+  .psub { margin: 0 0 14px; font-size: 14px; opacity: 0.85; font-weight: 600; }
+  .prows { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+  .prow {
+    display: flex; justify-content: space-between; align-items: center; padding: 9px 14px;
+    background: rgba(70, 120, 220, 0.13); border-radius: 12px; font-size: 15px; font-weight: 600;
+  }
+  .prow b { color: var(--ink); font-size: 16px; }
+  .prow small { font-weight: 600; opacity: 0.75; margin-left: 4px; }
+  .pbtns { display: flex; gap: 10px; justify-content: center; }
+
+  /* ---------- "Desktop View / Mobile View" chooser ---------- */
+  #viewpick { position: fixed; inset: 0; z-index: 190; display: none; overflow-y: auto; }
+  #viewpick.show { display: flex; }
+  .pickwrap { position: relative; z-index: 1; width: min(880px, 96vw); margin: auto; padding: 22px 0; text-align: center; }
+  .pickwrap h1 { margin-bottom: 4px; }
+  .pickwrap p { margin: 0 0 18px; font-size: 14px; opacity: 0.9; font-weight: 600; }
+  .pickrow { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; align-items: stretch; }
+  .pickcard {
+    position: relative; width: min(380px, 88vw); padding: 18px 14px 14px; cursor: pointer;
+    background: var(--panel); border: 2px solid var(--accent); border-radius: 22px; color: var(--ink);
+    font-size: 21px; font-weight: 700; transition: transform 0.15s, background 0.15s;
+  }
+  .pickcard:hover { background: var(--sel); transform: translateY(-4px); }
+  .pickcard svg { display: block; width: 100%; height: auto; max-height: 250px; margin: 0 auto 10px; filter: drop-shadow(0 10px 14px rgba(0, 0, 0, 0.35)); }
+  .pickcard small { display: block; margin-top: 3px; font-size: 12px; font-weight: 600; color: var(--text); opacity: 0.85; }
+  .pickcard .rec { position: absolute; top: -11px; right: 14px; background: #2f9e55; color: #fff; font-size: 11px; font-weight: 700; padding: 4px 11px; border-radius: 999px; }
+
+  @media (max-width: 560px) {
+    .chapters { grid-template-columns: repeat(2, 1fr); }
+    .levelgrid { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .lvl { font-size: 17px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="game" width="960" height="600"></canvas>
+
+<div id="menu" class="open">
+  <div class="sky"></div>
+  <div class="panel">
+    <h1>Doodle Ball</h1>
+    <div class="coinbar" id="coinbar"></div>
+    <nav class="tabs" id="tabs">
+      <button class="tab sel" data-tab="levels">Levels</button>
+      <button class="tab" data-tab="skins">Skins</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <section id="tab-levels" class="tabpane">
+      <div id="chapters" class="chapters"></div>
+      <div id="levelgrid" class="levelgrid"></div>
+    </section>
+
+    <section id="tab-skins" class="tabpane" hidden>
+      <h2>Ball skin</h2>
+      <div id="ballskins" class="cards"></div>
+      <h2>Doodle color</h2>
+      <div id="colors" class="cards"></div>
+      <canvas id="doodlepreview" width="720" height="160"></canvas>
+    </section>
+
+    <section id="tab-settings" class="tabpane" hidden>
+      <div id="settingsrows"></div>
+    </section>
+
+    <button class="resume" id="resume">Play</button>
+  </div>
+</div>
+
+<div id="safeprobe"></div>
+<div id="toast"></div>
+
+<div id="ingame">
+  <div class="sky"></div>
+  <div class="panel">
+    <h1>Settings</h1>
+    <div id="settingsrows2"></div>
+    <button class="resume" id="closeIngame">Back to level</button>
+  </div>
+</div>
+
+<div id="popup" class="popup">
+  <div class="prays"></div>
+  <div class="pcard">
+    <div class="pbadge"><svg viewBox="0 0 64 64"><path id="pstar" d="M32 6l7.4 15.6 17 2.3-12.4 11.8 3.1 16.9L32 44.4 16.9 52.6l3.1-16.9L7.6 23.9l17-2.3z" fill="#fff" stroke="#b8790a" stroke-width="3" stroke-linejoin="round"/></svg></div>
+    <h2 id="pTitle">Level Complete!</h2>
+    <p class="psub" id="pSub"></p>
+    <div class="prows" id="pRows"></div>
+    <div class="pbtns"><button class="btn" id="pMenu">Menu</button><button class="btn primary" id="pNext">Next level</button></div>
+  </div>
+</div>
+
+<div id="viewpick">
+  <div class="sky"></div>
+  <div class="pickwrap">
+    <h1>How are you playing?</h1>
+    <p>Pick your screen. You can change it later in Settings.</p>
+    <div class="pickrow">
+      <button class="pickcard" data-view="desktop" id="pickDesktop">
+        <svg viewBox="0 0 320 236" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Desktop monitor showing the game">
+          <defs>
+            <linearGradient id="mSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb3ff"/><stop offset="1" stop-color="#e2f5ff"/></linearGradient>
+            <linearGradient id="mBody" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3c4358"/><stop offset="1" stop-color="#171b27"/></linearGradient>
+            <linearGradient id="mStand" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#8f98ab"/><stop offset=".5" stop-color="#e6ebf5"/><stop offset="1" stop-color="#868fa2"/></linearGradient>
+            <radialGradient id="mBall" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff2a8"/><stop offset="1" stop-color="#e8960f"/></radialGradient>
+            <radialGradient id="mSun"><stop offset="0" stop-color="#fff6b0"/><stop offset="1" stop-color="#fff6b0" stop-opacity="0"/></radialGradient>
+            <linearGradient id="mFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4d4d" stop-opacity=".6"/><stop offset="1" stop-color="#ff4d4d" stop-opacity=".12"/></linearGradient>
+            <linearGradient id="mGlare" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/></linearGradient>
+            <clipPath id="mScr"><rect x="22" y="20" width="276" height="140" rx="6"/></clipPath>
+          </defs>
+          <ellipse cx="160" cy="226" rx="82" ry="7" fill="#000" opacity=".28"/>
+          <path d="M138 176 L182 176 L192 214 L128 214 Z" fill="url(#mStand)"/>
+          <rect x="100" y="212" width="120" height="10" rx="5" fill="url(#mStand)"/>
+          <rect x="10" y="8" width="300" height="170" rx="14" fill="url(#mBody)" stroke="#0d1018" stroke-width="2"/>
+          <g clip-path="url(#mScr)">
+            <rect x="22" y="20" width="276" height="140" fill="url(#mSky)"/>
+            <circle cx="262" cy="50" r="28" fill="url(#mSun)"/><circle cx="262" cy="50" r="10" fill="#ffe76a"/>
+            <g fill="#fff" opacity=".95"><ellipse cx="62" cy="52" rx="24" ry="8"/><ellipse cx="80" cy="46" rx="15" ry="10"/><ellipse cx="170" cy="40" rx="20" ry="7"/><ellipse cx="184" cy="35" rx="12" ry="8"/><ellipse cx="236" cy="96" rx="18" ry="6" opacity=".7"/></g>
+            <rect x="22" y="146" width="276" height="14" fill="url(#mFloor)"/><rect x="22" y="145" width="276" height="2.5" fill="#ff4d4d"/>
+            <rect x="196" y="116" width="82" height="9" rx="4" fill="#fff" stroke="#6a86bd" stroke-width="1.6"/>
+            <circle cx="236" cy="104" r="9" fill="#5aeb96" fill-opacity=".35" stroke="#2f9e55" stroke-width="2"/><path d="M236 98.5l1.8 3.7 4 .5-3 2.8.8 4-3.6-2-3.6 2 .8-4-3-2.8 4-.5z" fill="#ffe14d"/>
+            <path d="M66 66 Q118 124 192 112" fill="none" stroke="#26358f" stroke-width="3.4" stroke-linecap="round"/>
+            <circle cx="136" cy="102" r="5" fill="#ffd23f" stroke="#a8730a" stroke-width="1.5"/>
+            <circle cx="72" cy="52" r="8.5" fill="url(#mBall)" stroke="#a8620a" stroke-opacity=".5"/><ellipse cx="69.5" cy="49" rx="2.6" ry="1.6" fill="#fff" opacity=".85"/>
+            <g fill="#fff" stroke="#2a6fc0" stroke-width="1"><rect x="28" y="25" width="24" height="9" rx="3"/><rect x="246" y="25" width="22" height="9" rx="3"/><rect x="271" y="25" width="22" height="9" rx="3"/></g>
+            <polygon points="22,20 150,20 60,160 22,160" fill="url(#mGlare)"/>
+          </g>
+          <circle cx="160" cy="169" r="2.4" fill="#5b6378"/>
+        </svg>
+        Desktop View
+        <small>Big screen · mouse or touch</small>
+      </button>
+      <button class="pickcard" data-view="mobile" id="pickMobile">
+        <svg viewBox="0 0 200 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Phone showing the game">
+          <defs>
+            <linearGradient id="pSky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4fb3ff"/><stop offset="1" stop-color="#e2f5ff"/></linearGradient>
+            <linearGradient id="pBody" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#454c63"/><stop offset="1" stop-color="#151925"/></linearGradient>
+            <radialGradient id="pBall" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff2a8"/><stop offset="1" stop-color="#e8960f"/></radialGradient>
+            <radialGradient id="pSun"><stop offset="0" stop-color="#fff6b0"/><stop offset="1" stop-color="#fff6b0" stop-opacity="0"/></radialGradient>
+            <linearGradient id="pFloor" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4d4d" stop-opacity=".6"/><stop offset="1" stop-color="#ff4d4d" stop-opacity=".16"/></linearGradient>
+            <linearGradient id="pGlare" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".24"/><stop offset=".55" stop-color="#fff" stop-opacity="0"/></linearGradient>
+            <clipPath id="pScr"><rect x="14" y="12" width="172" height="316" rx="24"/></clipPath>
+          </defs>
+          <ellipse cx="100" cy="334" rx="66" ry="5" fill="#000" opacity=".25"/>
+          <rect x="6" y="3" width="188" height="330" rx="32" fill="url(#pBody)" stroke="#0d1018" stroke-width="2"/>
+          <rect x="192" y="86" width="4" height="34" rx="2" fill="#2b3145"/><rect x="192" y="132" width="4" height="22" rx="2" fill="#2b3145"/>
+          <g clip-path="url(#pScr)">
+            <rect x="14" y="12" width="172" height="316" fill="url(#pSky)"/>
+            <circle cx="150" cy="128" r="30" fill="url(#pSun)"/><circle cx="150" cy="128" r="10" fill="#ffe76a"/>
+            <g fill="#fff" opacity=".95"><ellipse cx="52" cy="92" rx="22" ry="8"/><ellipse cx="68" cy="86" rx="14" ry="9"/><ellipse cx="140" cy="62" rx="20" ry="7"/><ellipse cx="154" cy="57" rx="12" ry="8"/><ellipse cx="60" cy="260" rx="24" ry="8" opacity=".75"/><ellipse cx="78" cy="254" rx="14" ry="9" opacity=".75"/><ellipse cx="148" cy="208" rx="16" ry="6" opacity=".7"/></g>
+            <rect x="14" y="226" width="172" height="102" fill="url(#pFloor)"/><rect x="14" y="225" width="172" height="2.6" fill="#ff4d4d"/>
+            <rect x="118" y="190" width="58" height="7" rx="3.5" fill="#fff" stroke="#6a86bd" stroke-width="1.5"/>
+            <circle cx="147" cy="180" r="8" fill="#5aeb96" fill-opacity=".35" stroke="#2f9e55" stroke-width="2"/><path d="M147 174.5l1.7 3.5 3.8.5-2.8 2.7.7 3.8-3.4-1.9-3.4 1.9.7-3.8-2.8-2.7 3.8-.5z" fill="#ffe14d"/>
+            <path d="M34 136 Q70 196 114 190" fill="none" stroke="#26358f" stroke-width="3.2" stroke-linecap="round"/>
+            <circle cx="82" cy="176" r="4.6" fill="#ffd23f" stroke="#a8730a" stroke-width="1.4"/>
+            <circle cx="40" cy="122" r="8" fill="url(#pBall)" stroke="#a8620a" stroke-opacity=".5"/><ellipse cx="37.6" cy="119" rx="2.5" ry="1.5" fill="#fff" opacity=".85"/>
+            <g fill="#fff" stroke="#2a6fc0" stroke-width="1"><rect x="22" y="34" width="38" height="17" rx="5"/><rect x="66" y="34" width="22" height="17" rx="5"/><rect x="118" y="34" width="30" height="17" rx="5"/><rect x="152" y="34" width="26" height="17" rx="5"/><rect x="132" y="56" width="21" height="17" rx="5"/><rect x="157" y="56" width="21" height="17" rx="5"/><rect x="22" y="56" width="52" height="15" rx="7"/></g>
+            <rect x="72" y="314" width="56" height="4" rx="2" fill="#fff" opacity=".7"/>
+            <polygon points="14,12 120,12 40,328 14,328" fill="url(#pGlare)"/>
+          </g>
+          <circle cx="100" cy="23" r="3.6" fill="#0d1018"/>
+        </svg>
+        Mobile View
+        <small>Fills your whole phone screen · touch</small>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<div id="confirm">
+  <div class="dialog">
+    <h3 id="cTitle"></h3>
+    <p id="cText"></p>
+    <div class="btns"><button class="btn" id="cNo">Cancel</button><button class="btn" id="cYes">Yes</button></div>
+  </div>
+</div>
+
+<div id="boxfx" class="boxfx">
+  <div class="stage">
+    <div class="rays"></div>
+    <div class="confetti" id="confetti"></div>
+    <div class="giftbox" id="giftbox"><div class="base"></div><div class="lid"></div></div>
+    <div class="cardwrap"><div class="cardinner">
+      <div class="cardface cardback">?</div>
+      <div class="cardface cardfront" id="cardfront">
+        <div class="newtag">NEW!</div>
+        <div class="rar" id="cardRar">Rare</div>
+        <canvas id="cardArt" width="200" height="200"></canvas>
+        <div class="cname" id="cardName"></div>
+        <div class="ctype" id="cardType"></div>
+      </div>
+    </div></div>
+    <p id="boxhint">Tap the box to open</p>
+    <div class="boxbtns"><button class="btn primary" id="boxEquip">Equip</button><button class="btn" id="boxClose">Close</button></div>
+  </div>
+</div>
+
+<div id="busy">
+  <div class="spinner">
+    <i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i>
+    <i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i>
+  </div>
+  <p>Making changes</p>
+</div>
+
+<div id="loader">
+  <div class="sky"></div>
+  <h1>Doodle Ball</h1>
+  <div class="loadbox">
+    <div class="track"><div id="loadFill"></div></div>
+    <div id="loadPct">0%</div>
+    <div id="loadMsg">Loading maps</div>
+  </div>
+</div>
+
+<script>
+/* ---------- shared physics (used by the game AND by the level generator) ---------- */
+const W = 960, H = 600;
+const FLOOR = 580;          // y of the red line
+const BALL_R = 16;
+const GOAL_R = 22;
+const LINE_R = 4;           // half thickness of doodled lines
+
+/* ============================================================
+   PHYSICS SETTINGS - tweak these to change how the ball feels
+   Units: pixels and seconds. +y points DOWN.
+   ============================================================ */
+const PHYS = {
+  gravity: 1400,     // px/s^2
+  restitution: 0.3,  // bounciness (0 = dead, 1 = perfectly elastic)
+  friction: 0.45,    // surface grip; lets the ball actually ROLL instead of slide
+  damping: 0.15,     // tiny rolling resistance so the ball eventually stops (1/s)
+  maxSpeed: 2200,    // speed cap (px/s) so the ball never tunnels through lines
+  step: 1 / 240      // fixed physics timestep (s)
+};
+
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+function makeBall(x, y) { return { x, y, vx: 0, vy: 0, a: 0, w: 0, hit: 0 }; }
+
+function makeSeg(x1, y1, x2, y2) {
+  const m = BALL_R + LINE_R;
+  return {
+    x1, y1, x2, y2,
+    minx: Math.min(x1, x2) - m, maxx: Math.max(x1, x2) + m,
+    miny: Math.min(y1, y2) - m, maxy: Math.max(y1, y2) + m
+  };
+}
+
+// Impulse-based contact response for a solid disc (mass 1, inertia 0.5*m*r^2).
+// n = unit normal pointing from the surface toward the ball.
+function resolveContact(b, nx, ny) {
+  const vn = b.vx * nx + b.vy * ny;
+  if (vn >= 0) return;                               // already separating
+  const e = vn < -80 ? PHYS.restitution : 0;         // no micro-bounce jitter at rest
+  const Jn = -(1 + e) * vn;                          // normal impulse
+  if (Jn > b.hit) b.hit = Jn;                        // strongest impact since the game last looked (for sound)
+  b.vx += Jn * nx;
+  b.vy += Jn * ny;
+
+  // Friction: drives the contact point's sliding speed toward zero (= rolling).
+  const tx = -ny, ty = nx;
+  const vt = b.vx * tx + b.vy * ty - b.w * BALL_R;   // sliding speed at contact point
+  const maxJ = PHYS.friction * Jn;                   // Coulomb limit
+  const Jt = clamp(-vt / 3, -maxJ, maxJ);            // 3 = 1 + r^2/(I/m) for a solid disc
+  b.vx += Jt * tx;
+  b.vy += Jt * ty;
+  b.w += (-2 * Jt) / BALL_R;
+}
+
+function collideSegment(b, s) {
+  if (b.x < s.minx || b.x > s.maxx || b.y < s.miny || b.y > s.maxy) return;
+  const abx = s.x2 - s.x1, aby = s.y2 - s.y1;
+  const len2 = abx * abx + aby * aby;
+  let t = len2 > 0 ? ((b.x - s.x1) * abx + (b.y - s.y1) * aby) / len2 : 0;
+  t = clamp(t, 0, 1);
+  const dx = b.x - (s.x1 + abx * t), dy = b.y - (s.y1 + aby * t);
+  const R = BALL_R + LINE_R;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= R * R) return;
+  const d = Math.sqrt(d2);
+  let nx, ny;
+  if (d > 1e-6) { nx = dx / d; ny = dy / d; }
+  else { nx = 0; ny = -1; }
+  b.x += nx * (R - d);                               // push out of the line
+  b.y += ny * (R - d);
+  resolveContact(b, nx, ny);
+}
+
+function collideRect(b, r) {
+  const rx = r[0], ry = r[1], rw = r[2], rh = r[3];
+  const cx = clamp(b.x, rx, rx + rw), cy = clamp(b.y, ry, ry + rh);
+  const dx = b.x - cx, dy = b.y - cy;
+  const d2 = dx * dx + dy * dy;
+  if (d2 >= BALL_R * BALL_R) return;
+  let nx, ny, pen;
+  if (d2 > 1e-9) {
+    const d = Math.sqrt(d2);
+    nx = dx / d; ny = dy / d; pen = BALL_R - d;
+  } else {                                           // center inside the block: exit by the shortest way
+    const l = b.x - rx, rr = rx + rw - b.x, t = b.y - ry, bt = ry + rh - b.y;
+    const m = Math.min(l, rr, t, bt);
+    if (m === l) { nx = -1; ny = 0; }
+    else if (m === rr) { nx = 1; ny = 0; }
+    else if (m === t) { nx = 0; ny = -1; }
+    else { nx = 0; ny = 1; }
+    pen = m + BALL_R;
+  }
+  b.x += nx * pen;
+  b.y += ny * pen;
+  resolveContact(b, nx, ny);
+}
+
+function touchesRect(b, r, shrink) {
+  const cx = clamp(b.x, r[0], r[0] + r[2]), cy = clamp(b.y, r[1], r[1] + r[3]);
+  const dx = b.x - cx, dy = b.y - cy;
+  const rad = BALL_R - shrink;
+  return dx * dx + dy * dy < rad * rad;
+}
+
+// One physics step. Returns 'reset' (red line / red block), 'goal', or null.
+// level = { rects: [[x,y,w,h]...], hazards: [[x,y,w,h]...], goal: {x,y} | null }
+function stepBall(ball, level, segs, dt) {
+  ball.vy += PHYS.gravity * dt;
+  const damp = 1 - PHYS.damping * dt;
+  ball.vx *= damp; ball.vy *= damp; ball.w *= damp;
+  const sp = Math.hypot(ball.vx, ball.vy);
+  if (sp > PHYS.maxSpeed) { ball.vx *= PHYS.maxSpeed / sp; ball.vy *= PHYS.maxSpeed / sp; }
+
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+  ball.a += ball.w * dt;
+
+  const rects = level.rects;
+  for (let it = 0; it < 2; it++) {                   // 2 passes settles corners and stacked contacts
+    if (ball.x < BALL_R)     { ball.x = BALL_R;     resolveContact(ball, 1, 0); }
+    if (ball.x > W - BALL_R) { ball.x = W - BALL_R; resolveContact(ball, -1, 0); }
+    if (ball.y < BALL_R)     { ball.y = BALL_R;     resolveContact(ball, 0, 1); }
+    for (let i = 0; i < rects.length; i++) collideRect(ball, rects[i]);
+    for (let i = 0; i < segs.length; i++) collideSegment(ball, segs[i]);
+  }
+
+  if (ball.y + BALL_R >= FLOOR) return 'reset';
+  const hz = level.hazards;
+  if (hz) for (let i = 0; i < hz.length; i++) if (touchesRect(ball, hz[i], 2)) return 'reset';
+  const g = level.goal;
+  if (g && Math.hypot(ball.x - g.x, ball.y - g.y) < GOAL_R + BALL_R * 0.5) return 'goal';
+  return null;
+}
+
+
+/* ---------------- levels (4 chapters x 25, every one verified solvable by simulation) ---------------- */
+const LEVELS = [[{"ball":{"x":764,"y":46},"goal":{"x":110,"y":274},"rects":[[10,296,250,20]],"hazards":[],"guide":[[[827,111],[320,239]]],"solveTime":2.6,"coins":[[741,112,5],[475,179,5],[225,279,5]]},{"ball":{"x":700,"y":53},"goal":{"x":121,"y":272},"rects":[[10,294,248,20]],"hazards":[],"guide":[[[765,109],[320,242]]],"solveTime":2.2,"coins":[[681,113,5],[447,183,5],[226,277,5]]},{"ball":{"x":820,"y":49},"goal":{"x":107,"y":336},"rects":[[10,358,245,20]],"hazards":[],"guide":[[[889,121],[320,301]]],"solveTime":2.4,"coins":[[799,126,5],[510,220,5],[229,332,5]]},{"ball":{"x":248,"y":62},"goal":{"x":841,"y":294},"rects":[[706,316,243,20]],"hazards":[],"guide":[[[187,118],[640,263]]],"solveTime":2.2,"coins":[[269,123,5],[508,200,5],[734,299,5]]},{"ball":{"x":732,"y":57},"goal":{"x":120,"y":261},"rects":[[13,283,240,20],[836,19,71,58]],"hazards":[],"guide":[[[796,121],[320,224]]],"solveTime":2.7,"coins":[[711,119,5],[461,173,5],[229,265,5]]},{"ball":{"x":200,"y":39},"goal":{"x":832,"y":239},"rects":[[700,261,238,20],[83,347,87,61]],"hazards":[],"guide":[[[134,107],[640,211]]],"solveTime":2.8,"coins":[[218,104,5],[477,157,5],[722,242,5]]},{"ball":{"x":828,"y":52},"goal":{"x":131,"y":258},"rects":[[27,280,235,20],[875,415,17,92]],"hazards":[],"guide":[[[874,116],[320,237]]],"solveTime":2.9,"coins":[[795,113,5],[517,174,5],[247,255,5]]},{"ball":{"x":117,"y":35},"goal":{"x":832,"y":312},"rects":[[702,334,233,20],[415,438,66,17]],"hazards":[],"guide":[[[80,105],[640,292]]],"solveTime":2.4,"coins":[[148,107,5],[433,202,5],[713,308,5]]},{"ball":{"x":796,"y":37},"goal":{"x":126,"y":249},"rects":[[25,271,230,20],[218,399,23,99]],"hazards":[],"guide":[[[835,112],[320,218]]],"solveTime":2.9,"coins":[[774,104,5],[500,160,5],[239,245,5]]},{"ball":{"x":111,"y":64},"goal":{"x":839,"y":314},"rects":[[712,336,228,20],[817,188,85,41]],"hazards":[],"guide":[[[71,120],[640,284]]],"solveTime":2.6,"coins":[[155,123,5],[442,206,5],[721,306,5]]},{"ball":{"x":727,"y":42},"goal":{"x":128,"y":296},"rects":[[29,318,225,20],[694,469,22,79]],"hazards":[],"guide":[[[780,112],[320,266]]],"solveTime":2.2,"coins":[[712,109,5],[470,195,5],[236,295,5]]},{"ball":{"x":221,"y":63},"goal":{"x":829,"y":276},"rects":[[704,298,223,20],[612,431,23,101]],"hazards":[],"guide":[[[176,120],[640,248]]],"solveTime":2.4,"coins":[[250,120,5],[492,186,5],[723,275,5]]},{"ball":{"x":749,"y":65},"goal":{"x":832,"y":426},"rects":[[708,448,220,20],[120,50,63,71],[306,447,49,63]],"hazards":[],"guide":[[[815,121],[385,239]],[[229,242],[229,287],[640,388]]],"solveTime":4.7,"coins":[[663,142,5],[252,263,5],[678,383,5]]},{"ball":{"x":707,"y":54},"goal":{"x":823,"y":419},"rects":[[699,441,218,20],[116,193,19,83],[84,392,50,56]],"hazards":[],"guide":[[[768,123],[385,248]],[[234,244],[234,289],[640,390]]],"solveTime":4.3,"coins":[[648,141,5],[283,276,5],[677,385,5]]},{"ball":{"x":130,"y":41},"goal":{"x":135,"y":451},"rects":[[42,473,215,20],[628,66,67,15],[141,230,16,96]],"hazards":[],"guide":[[[91,110],[554,256]],[[728,255],[728,300],[323,418]]],"solveTime":4.5,"coins":[[210,126,5],[636,282,5],[290,411,5]]},{"ball":{"x":232,"y":43},"goal":{"x":137,"y":459},"rects":[[45,481,213,20],[513,523,143,19],[548,53,102,24]],"hazards":[],"guide":[[[193,115],[642,236]],[[816,232],[816,277],[330,425]]],"solveTime":4.9,"coins":[[327,130,5],[794,262,5],[309,412,5]]},{"ball":{"x":760,"y":50},"goal":{"x":813,"y":436},"rects":[[694,458,210,20],[38,278,85,88],[525,483,60,24]],"hazards":[],"guide":[[[800,109],[388,241]],[[220,240],[220,285],[640,416]]],"solveTime":4.3,"coins":[[673,129,5],[261,263,5],[653,399,5]]},{"ball":{"x":191,"y":47},"goal":{"x":245,"y":447},"rects":[[155,469,208,20],[167,284,90,75],[743,71,133,17]],"hazards":[],"guide":[[[133,105],[678,268]],[[849,261],[849,306],[420,425]]],"solveTime":4.7,"coins":[[291,131,5],[768,300,5],[421,404,5]]},{"ball":{"x":114,"y":53},"goal":{"x":136,"y":446},"rects":[[49,468,205,20],[477,91,65,22],[307,503,104,18]],"hazards":[],"guide":[[[75,120],[560,276]],[[731,271],[731,316],[320,408]]],"solveTime":4.7,"coins":[[207,141,5],[660,302,5],[299,394,5]]},{"ball":{"x":138,"y":43},"goal":{"x":154,"y":428},"rects":[[67,450,203,20],[602,518,106,21],[206,234,14,70]],"hazards":[],"guide":[[[78,113],[522,257]],[[673,256],[673,301],[320,408]]],"solveTime":4.2,"coins":[[203,133,5],[607,288,5],[306,392,5]]},{"ball":{"x":251,"y":67},"goal":{"x":172,"y":454},"rects":[[87,476,200,20],[662,432,77,88],[99,19,23,80],[371,482,70,62]],"hazards":[],"guide":[[[197,123],[750,240]],[[909,240],[909,285],[357,423]]],"solveTime":5.5,"coins":[[375,140,5],[883,269,5],[359,402,5]]},{"ball":{"x":703,"y":53},"goal":{"x":740,"y":445},"rects":[[626,467,198,20],[124,91,61,78],[859,199,64,47],[734,218,20,74]],"hazards":[],"guide":[[[761,110],[304,232]],[[123,226],[123,271],[558,412]]],"solveTime":4.7,"coins":[[610,130,5],[180,257,5],[578,398,5]]},{"ball":{"x":133,"y":63},"goal":{"x":150,"y":405},"rects":[[67,427,195,20],[763,155,16,156],[764,356,22,153],[827,434,54,82]],"hazards":[],"guide":[[[77,123],[548,242]],[[694,233],[694,278],[320,377]]],"solveTime":4.6,"coins":[[216,138,5],[632,271,5],[300,363,5]]},{"ball":{"x":703,"y":51},"goal":{"x":754,"y":459},"rects":[[642,481,193,20],[530,252,130,19],[815,200,20,148],[293,32,20,64]],"hazards":[],"guide":[[[765,121],[259,255]],[[99,247],[99,292],[580,434]]],"solveTime":4.8,"coins":[[614,140,5],[149,268,5],[581,413,5]]},{"ball":{"x":710,"y":45},"goal":{"x":716,"y":428},"rects":[[606,450,190,20],[847,327,42,75],[735,299,20,65],[910,384,22,89]],"hazards":[],"guide":[[[765,110],[210,237]],[[55,229],[55,274],[541,401]]],"solveTime":5.2,"coins":[[605,126,5],[110,263,5],[536,379,5]]}],[{"ball":{"x":795,"y":41},"goal":{"x":705,"y":430},"rects":[[590,452,200,20],[704,286,58,86],[827,361,67,79],[58,230,49,50]],"hazards":[],"guide":[[[835,108],[315,235]],[[161,230],[161,275],[534,404]]],"solveTime":4.6,"coins":[[710,118,5],[485,173,5],[264,236,5],[329,312,5],[547,387,5]]},{"ball":{"x":246,"y":50},"goal":{"x":196,"y":448},"rects":[[112,470,198,20],[217,257,48,67],[579,441,42,78],[762,40,85,20]],"hazards":[],"guide":[[[184,117],[745,242]],[[918,235],[918,280],[372,426]]],"solveTime":5.5,"coins":[[357,135,5],[627,195,5],[876,259,5],[654,330,5],[387,401,5]]},{"ball":{"x":235,"y":32},"goal":{"x":165,"y":434},"rects":[[82,456,196,20],[147,166,73,14],[390,18,168,25],[92,131,19,66]],"hazards":[],"guide":[[[194,107],[622,229]],[[781,227],[781,272],[346,402]]],"solveTime":4.5,"coins":[[314,120,5],[541,185,5],[746,249,5],[554,319,5],[328,387,5]]},{"ball":{"x":698,"y":55},"goal":{"x":666,"y":448},"rects":[[554,470,194,20],[656,299,86,89],[770,430,64,58],[351,458,66,42]],"hazards":[],"guide":[[[764,115],[263,256]],[[83,253],[83,298],[486,414]]],"solveTime":4.6,"coins":[[610,138,5],[378,203,5],[163,300,5],[273,332,5],[504,399,5]]},{"ball":{"x":152,"y":65},"goal":{"x":247,"y":501},"rects":[[167,523,192,20],[183,350,73,47],[26,234,81,76],[765,481,149,18],[883,106,23,98]],"hazards":[],"guide":[[[119,123],[674,276]],[[863,271],[863,316],[426,470]]],"solveTime":4.7,"coins":[[267,143,5],[523,214,5],[767,309,5],[677,361,5],[426,449,5]]},{"ball":{"x":178,"y":43},"goal":{"x":143,"y":450},"rects":[[63,472,190,20],[160,206,45,64],[821,463,70,60],[304,503,60,16],[36,226,15,88]],"hazards":[],"guide":[[[128,108],[690,258]],[[882,257],[882,302],[320,422]]],"solveTime":5.4,"coins":[[290,131,5],[560,203,5],[802,280,5],[606,340,5],[333,399,5]]},{"ball":{"x":213,"y":40},"goal":{"x":217,"y":436},"rects":[[139,458,188,20],[188,314,52,64],[43,359,15,104],[39,273,71,25],[670,128,118,25]],"hazards":[],"guide":[[[167,112],[648,253]],[[822,248],[822,293],[387,409]]],"solveTime":4.7,"coins":[[300,130,5],[535,199,5],[755,285,5],[623,325,5],[386,389,5]]},{"ball":{"x":170,"y":46},"goal":{"x":246,"y":461},"rects":[[169,483,185,20],[169,234,140,20],[412,11,66,77],[570,25,18,66],[348,239,66,89]],"hazards":[],"guide":[[[118,110],[624,257]],[[814,259],[814,304],[425,423]]],"solveTime":4.6,"coins":[[254,129,5],[478,194,5],[696,274,5],[626,341,5],[403,410,5]]},{"ball":{"x":183,"y":61},"goal":{"x":143,"y":501},"rects":[[68,523,183,20],[124,399,105,24],[203,238,48,53],[451,75,85,43],[54,332,79,21]],"hazards":[],"guide":[[[143,117],[540,270]],[[719,272],[719,317],[320,465]]],"solveTime":4,"coins":[[268,144,5],[476,224,5],[655,301,5],[503,376,5],[295,454,5]]},{"ball":{"x":242,"y":50},"goal":{"x":157,"y":424},"rects":[[83,446,181,20],[154,162,62,15],[756,138,113,16],[624,432,15,67],[775,404,71,26]],"hazards":[],"guide":[[[172,107],[604,247]],[[761,245],[761,290],[320,401]]],"solveTime":4.5,"coins":[[322,134,5],[538,204,5],[736,263,5],[536,326,5],[316,381,5]]},{"ball":{"x":745,"y":46},"goal":{"x":808,"y":446},"rects":[[702,468,179,20],[767,342,120,18],[462,453,68,61],[775,226,57,52],[95,45,20,125]],"hazards":[],"guide":[[[814,119],[436,263]],[[294,258],[294,303],[640,413]]],"solveTime":3.9,"coins":[[700,141,5],[515,211,5],[346,292,5],[484,342,5],[671,406,5]]},{"ball":{"x":168,"y":56},"goal":{"x":164,"y":394},"rects":[[92,416,177,20],[122,308,77,17],[400,60,90,19],[805,223,132,23],[668,359,19,107]],"hazards":[],"guide":[[[122,111],[441,234]],[[601,230],[601,275],[320,368]]],"solveTime":3.5,"coins":[[214,125,5],[365,183,5],[508,255,5],[432,310,5],[282,367,5]]},{"ball":{"x":767,"y":55},"goal":{"x":349,"y":463},"rects":[[278,485,175,20],[423,319,116,17],[702,202,61,20],[288,278,59,73],[808,441,100,18],[870,252,15,65]],"hazards":[],"guide":[[[818,115],[578,187]],[[442,185],[442,230],[668,298]],[[798,293],[798,338],[511,429]]],"solveTime":5.5,"coins":[[690,132,5],[503,227,5],[671,278,5],[702,347,5],[496,414,5]]},{"ball":{"x":202,"y":44},"goal":{"x":532,"y":453},"rects":[[429,475,173,20],[448,347,73,24],[814,244,66,20],[83,180,113,17],[598,42,17,165],[558,70,17,135]],"hazards":[],"guide":[[[151,111],[341,180]],[[480,173],[480,218],[210,294]],[[71,296],[71,341],[377,428]]],"solveTime":5.4,"coins":[[266,132,5],[387,223,5],[183,285,5],[179,351,5],[385,410,5]]},{"ball":{"x":703,"y":50},"goal":{"x":330,"y":479},"rects":[[261,501,171,20],[324,379,88,16],[905,340,15,167],[396,23,80,18],[390,312,76,25],[184,339,21,69]],"hazards":[],"guide":[[[763,120],[478,191]],[[343,192],[343,237],[651,318]],[[823,318],[823,363],[494,439]]],"solveTime":6.5,"coins":[[609,138,5],[393,223,5],[630,292,5],[747,360,5],[497,418,5]]},{"ball":{"x":162,"y":42},"goal":{"x":425,"y":458},"rects":[[324,480,169,20],[368,335,77,15],[613,96,129,21],[568,210,81,59],[833,382,114,25],[494,100,59,54]],"hazards":[],"guide":[[[104,109],[327,177]],[[485,174],[485,219],[210,305]],[[73,302],[73,347],[275,427]]],"solveTime":5.5,"coins":[[212,121,5],[381,193,5],[273,264,5],[133,343,5],[299,418,5]]},{"ball":{"x":786,"y":50},"goal":{"x":413,"y":488},"rects":[[346,510,167,20],[661,204,81,16],[202,295,135,18],[250,380,75,44],[24,510,131,22],[54,295,65,18]],"hazards":[],"guide":[[[838,120],[535,192]],[[372,184],[372,229],[733,322]],[[899,324],[899,369],[569,457]]],"solveTime":6.8,"coins":[[678,138,5],[430,218,5],[622,273,5],[854,360,5],[597,429,5]]},{"ball":{"x":182,"y":44},"goal":{"x":716,"y":455},"rects":[[617,477,165,20],[568,317,61,18],[622,40,155,16],[860,226,65,43],[122,272,17,80],[19,58,81,43]],"hazards":[],"guide":[[[122,108],[512,193]],[[669,195],[669,240],[413,309]],[[247,311],[247,356],[567,430]]],"solveTime":6.8,"coins":[[292,125,5],[538,182,5],[484,269,5],[309,350,5],[556,407,5]]},{"ball":{"x":248,"y":55},"goal":{"x":614,"y":481},"rects":[[515,503,163,20],[436,326,76,19],[744,212,109,16],[645,78,19,100],[65,123,83,40],[712,159,90,15]],"hazards":[],"guide":[[[189,117],[462,199]],[[629,201],[629,246],[210,335]],[[41,329],[41,374],[466,461]]],"solveTime":7.2,"coins":[[369,150,5],[552,242,5],[264,303,5],[125,371,5],[414,430,5]]},{"ball":{"x":796,"y":59},"goal":{"x":386,"y":470},"rects":[[323,492,160,20],[415,331,169,15],[892,38,40,43],[32,221,58,59],[436,47,168,18],[205,400,117,16]],"hazards":[],"guide":[[[856,121],[657,200]],[[522,200],[522,245],[696,314]],[[825,309],[825,354],[538,439]]],"solveTime":5.1,"coins":[[737,147,5],[573,235,5],[707,297,5],[718,365,5],[523,423,5]]},{"ball":{"x":777,"y":42},"goal":{"x":307,"y":468},"rects":[[245,490,158,20],[404,341,77,17],[853,359,17,88],[184,118,22,80],[652,474,52,55],[106,213,21,121],[671,218,145,20]],"hazards":[],"guide":[[[829,113],[460,203]],[[317,194],[317,239],[631,322]],[[802,316],[802,361],[455,443]]],"solveTime":6.8,"coins":[[653,135,5],[386,226,5],[548,279,5],[765,349,5],[487,415,5]]},{"ball":{"x":745,"y":44},"goal":{"x":445,"y":481},"rects":[[384,503,156,20],[434,359,113,19],[756,447,66,19],[258,392,124,22],[181,117,15,107],[56,483,157,23],[28,52,89,60]],"hazards":[],"guide":[[[813,114],[502,194]],[[338,193],[338,238],[716,317]],[[875,311],[875,356],[601,442]]],"solveTime":6.6,"coins":[[651,135,5],[418,233,5],[545,261,5],[786,341,5],[611,418,5]]},{"ball":{"x":246,"y":49},"goal":{"x":509,"y":452},"rects":[[415,474,154,20],[462,313,82,78],[789,281,43,67],[275,465,89,48],[16,176,90,15],[601,191,42,67],[32,228,81,42]],"hazards":[],"guide":[[[179,108],[413,182]],[[539,180],[539,225],[315,313]],[[167,313],[167,358],[373,428]]],"solveTime":5.1,"coins":[[302,126,5],[472,204,5],[382,265,5],[230,349,5],[379,409,5]]},{"ball":{"x":117,"y":52},"goal":{"x":476,"y":438},"rects":[[382,460,152,20],[332,318,135,17],[69,472,139,23],[609,261,14,159],[745,150,65,50],[809,492,83,40],[727,65,79,19]],"hazards":[],"guide":[[[74,113],[278,190]],[[411,183],[411,228],[210,291]],[[71,288],[71,333],[336,416]]],"solveTime":5.2,"coins":[[175,130,5],[339,212,5],[243,260,5],[169,343,5],[346,398,5]]},{"ball":{"x":774,"y":48},"goal":{"x":370,"y":472},"rects":[[313,494,150,20],[590,209,96,16],[868,154,22,84],[692,442,59,57],[769,223,72,16],[844,444,74,58],[14,343,88,49]],"hazards":[],"guide":[[[827,110],[431,200]],[[293,196],[293,241],[560,319]],[[718,320],[718,365],[506,447]]],"solveTime":6.1,"coins":[[684,122,5],[458,173,5],[365,241,5],[587,309,5],[524,419,5]]}],[{"ball":{"x":142,"y":45},"goal":{"x":672,"y":458},"rects":[[579,480,150,20],[564,288,15,74],[445,303,82,17],[696,117,135,16],[129,528,124,21],[465,484,88,21],[733,262,114,15]],"hazards":[[209,33,47,39]],"guide":[[[91,117],[377,187]],[[526,183],[526,228],[334,302]],[[173,299],[173,344],[521,423]]],"solveTime":6.3,"coins":[[223,129,5],[355,161,5],[461,227,5],[400,255,5],[282,317,5],[250,341,15],[383,371,5],[515,401,5]]},{"ball":{"x":752,"y":49},"goal":{"x":298,"y":476},"rects":[[242,498,148,20],[381,336,96,16],[578,212,90,19],[581,502,165,22],[361,114,82,18],[917,128,14,81],[727,395,116,22]],"hazards":[[347,371,72,14]],"guide":[[[800,123],[489,200]],[[314,201],[314,246],[532,317]],[[701,319],[701,364],[436,453]]],"solveTime":6.4,"coins":[[651,139,5],[523,171,5],[412,233,5],[367,242,5],[492,283,5],[602,349,15],[555,392,5],[430,434,5]]},{"ball":{"x":174,"y":46},"goal":{"x":376,"y":436},"rects":[[285,458,147,20],[293,297,88,56],[149,185,94,15],[703,120,16,166],[743,173,125,18],[856,229,64,71],[161,450,73,47]],"hazards":[],"guide":[[[129,108],[301,176]],[[441,177],[441,222],[210,288]],[[60,291],[60,336],[240,405]]],"solveTime":5.1,"coins":[[227,125,5],[323,165,5],[398,204,5],[346,228,5],[246,257,5],[155,303,15],[160,353,5],[257,391,5]]},{"ball":{"x":699,"y":52},"goal":{"x":325,"y":449},"rects":[[271,471,145,20],[376,308,127,23],[303,354,105,15],[290,200,54,74],[93,246,118,14],[18,81,63,74],[847,403,55,84],[708,248,121,20]],"hazards":[[577,207,57,17]],"guide":[[[764,113],[543,184]],[[397,183],[397,228],[565,298]],[[719,294],[719,339],[461,424]]],"solveTime":5.2,"coins":[[646,130,5],[545,162,5],[465,230,5],[494,247,5],[591,290,5],[656,339,15],[555,372,5],[454,405,5]]},{"ball":{"x":116,"y":40},"goal":{"x":420,"y":469},"rects":[[331,491,143,20],[180,203,77,17],[299,330,72,19],[675,288,16,82],[30,155,18,114],[485,93,145,18],[570,435,134,16],[385,35,116,20]],"hazards":[[371,393,74,19]],"guide":[[[83,107],[425,190]],[[571,182],[571,227],[238,310]],[[70,309],[70,354],[279,434]]],"solveTime":6.4,"coins":[[216,119,5],[358,153,5],[489,208,5],[466,233,5],[325,268,5],[189,315,15],[119,351,5],[255,403,5]]},{"ball":{"x":218,"y":47},"goal":{"x":495,"y":458},"rects":[[406,480,142,20],[338,323,66,14],[426,360,79,14],[437,21,103,20],[526,181,15,148],[618,222,21,134],[564,97,165,24],[834,45,62,72]],"hazards":[[432,289,34,44]],"guide":[[[184,110],[347,183]],[[480,182],[480,227],[262,296]],[[113,297],[113,342],[361,435]]],"solveTime":5,"coins":[[305,142,5],[403,202,5],[423,224,5],[312,259,5],[209,309,5],[158,337,15],[267,378,5],[375,419,5]]},{"ball":{"x":226,"y":64},"goal":{"x":410,"y":474},"rects":[[322,496,140,20],[333,342,105,26],[372,397,94,16],[511,361,154,22],[113,143,43,69],[681,212,57,89],[609,168,110,14],[490,11,83,59]],"hazards":[[201,214,106,17],[49,402,35,43]],"guide":[[[176,124],[361,203]],[[522,203],[522,248],[244,318]],[[76,317],[76,362],[280,447]]],"solveTime":5.3,"coins":[[272,143,5],[363,182,5],[437,245,5],[372,265,5],[277,289,5],[191,333,15],[201,392,5],[292,430,5]]},{"ball":{"x":804,"y":50},"goal":{"x":489,"y":434},"rects":[[438,456,138,20],[503,299,45,56],[580,298,68,25],[175,109,159,21],[156,248,15,99],[241,473,143,24],[100,77,18,123],[367,251,67,58]],"hazards":[[716,190,61,19],[781,488,62,13]],"guide":[[[837,119],[630,187]],[[489,186],[489,231],[750,286]],[[887,281],[887,326],[628,404]]],"solveTime":5.8,"coins":[[732,132,5],[617,171,5],[523,212,5],[611,236,5],[730,261,5],[825,319,15],[749,347,5],[632,382,5]]},{"ball":{"x":113,"y":35},"goal":{"x":753,"y":467},"rects":[[666,489,137,20],[300,211,89,20],[610,339,72,25],[96,207,19,126],[117,465,94,15],[30,428,49,80],[484,38,54,74],[807,217,16,109]],"hazards":[[545,303,33,48],[833,140,33,39]],"guide":[[[75,105],[427,191]],[[605,191],[605,236],[398,318]],[[249,317],[249,362],[611,435]]],"solveTime":6.6,"coins":[[205,116,5],[340,149,5],[471,191,5],[486,262,5],[361,320,5],[319,356,15],[455,383,5],[591,411,5]]},{"ball":{"x":226,"y":50},"goal":{"x":577,"y":469},"rects":[[491,491,135,20],[467,292,55,77],[542,322,15,89],[572,77,14,162],[622,61,14,111],[37,332,19,147],[673,413,58,48],[895,189,47,51],[792,362,133,23]],"hazards":[[288,54,50,37],[11,515,74,13]],"guide":[[[156,118],[384,202]],[[544,195],[544,240],[254,321]],[[101,318],[101,363],[435,433]]],"solveTime":6.1,"coins":[[287,145,5],[403,189,5],[477,238,5],[357,272,5],[237,306,5],[192,362,15],[314,387,5],[436,413,5]]},{"ball":{"x":781,"y":63},"goal":{"x":429,"y":451},"rects":[[381,473,133,20],[435,343,48,43],[628,223,17,77],[308,35,22,71],[859,194,71,50],[164,74,19,138],[322,313,16,153],[251,165,79,81],[798,520,66,16]],"hazards":[[667,207,44,42],[240,479,45,33]],"guide":[[[845,121],[544,203]],[[379,202],[379,247],[542,315]],[[700,312],[700,357],[546,424]]],"solveTime":4.8,"coins":[[735,130,5],[645,155,5],[556,179,5],[477,224,5],[469,263,5],[555,299,15],[612,370,5],[535,407,5]]},{"ball":{"x":769,"y":50},"goal":{"x":366,"y":473},"rects":[[318,495,132,20],[541,213,152,18],[570,251,119,19],[797,255,75,48],[97,286,20,164],[256,339,109,22],[198,236,14,85],[26,236,15,97],[827,122,78,84]],"hazards":[[427,348,68,18],[758,448,102,15]],"guide":[[[811,110],[475,201]],[[325,194],[325,239],[529,325]],[[681,324],[681,369],[497,442]]],"solveTime":5.6,"coins":[[699,120,5],[591,149,5],[483,178,5],[391,238,5],[451,270,5],[553,316,15],[598,380,5],[494,422,5]]},{"ball":{"x":202,"y":53},"goal":{"x":313,"y":497},"rects":[[266,519,130,20],[187,374,109,21],[259,428,84,17],[819,197,107,22],[734,82,155,16],[345,44,72,22],[19,132,78,68],[622,332,85,19],[681,178,66,24]],"hazards":[[191,194,41,48],[27,82,82,19]],"guide":[[[147,113],[369,168]],[[526,171],[526,216],[333,271]],[[176,262],[176,307],[382,365]],[[545,366],[545,411],[425,461]]],"solveTime":7.2,"coins":[[264,121,5],[367,147,5],[446,214,5],[382,236,5],[289,282,5],[330,330,15],[423,375,5],[420,441,5]]},{"ball":{"x":135,"y":65},"goal":{"x":198,"y":483},"rects":[[152,505,128,20],[88,244,89,65],[129,352,111,14],[600,180,18,79],[111,447,17,69],[758,163,22,120],[855,173,71,21],[611,432,17,86],[551,419,16,122]],"hazards":[[94,396,116,19],[731,345,44,44]],"guide":[[[93,122],[334,171]],[[493,173],[493,218],[360,267]],[[236,268],[236,313],[398,367]],[[516,361],[516,406],[321,450]]],"solveTime":6.8,"coins":[[212,126,5],[323,148,5],[407,217,5],[348,251,5],[308,316,5],[415,353,15],[435,404,5],[325,429,5]]},{"ball":{"x":243,"y":40},"goal":{"x":240,"y":473},"rects":[[195,495,127,20],[179,346,133,16],[176,398,109,18],[505,465,163,19],[126,119,17,144],[791,438,72,15],[719,21,145,20],[659,237,50,43],[61,128,14,104]],"hazards":[[220,312,53,12],[602,75,47,48]],"guide":[[[183,106],[373,153]],[[518,152],[518,197],[398,250]],[[273,244],[273,289],[512,346]],[[645,344],[645,389],[365,448]]],"solveTime":7.1,"coins":[[320,119,5],[429,176,5],[379,239,5],[368,291,5],[492,321,5],[589,371,15],[516,396,5],[391,422,5]]},{"ball":{"x":783,"y":53},"goal":{"x":742,"y":472},"rects":[[661,494,125,20],[775,225,20,135],[690,176,153,22],[155,253,72,42],[127,93,64,17],[128,377,65,52],[341,404,21,106],[299,68,154,19],[309,190,16,109],[54,247,44,63]],"hazards":[[699,388,71,12],[296,34,74,14]],"guide":[[[821,113],[591,167]],[[463,165],[463,210],[594,265]],[[740,258],[740,303],[598,354]],[[480,348],[480,393],[627,444]]],"solveTime":6.2,"coins":[[718,117,5],[617,140,5],[529,190,5],[530,217,5],[624,261,5],[629,321,15],[552,383,5],[624,422,5]]},{"ball":{"x":238,"y":48},"goal":{"x":252,"y":480},"rects":[[209,502,123,20],[148,401,129,18],[175,171,60,63],[59,93,102,25],[572,463,119,16],[782,385,17,76],[589,287,15,112],[593,191,127,20],[905,60,15,75],[115,336,87,16]],"hazards":[[258,355,54,12],[664,335,68,20]],"guide":[[[198,121],[386,173]],[[536,167],[536,212],[344,260]],[[195,256],[195,301],[404,345]],[[529,342],[529,387],[373,446]]],"solveTime":7.5,"coins":[[316,133,5],[435,181,5],[488,203,5],[362,235,5],[262,288,5],[339,311,15],[453,362,5],[397,415,5]]},{"ball":{"x":816,"y":57},"goal":{"x":756,"y":493},"rects":[[676,515,122,20],[758,338,66,22],[777,195,90,19],[68,117,41,50],[298,379,14,123],[215,301,24,86],[485,35,83,74],[362,170,21,87],[238,162,20,94],[827,404,14,116]],"hazards":[[805,264,36,36],[207,487,66,13]],"guide":[[[853,112],[664,156]],[[524,156],[524,201],[649,254]],[[785,252],[785,297],[508,356]],[[355,356],[355,401],[627,460]]],"solveTime":7.8,"coins":[[718,123,5],[607,180,5],[644,230,5],[688,297,5],[561,324,5],[450,381,15],[481,408,5],[608,435,5]]},{"ball":{"x":205,"y":45},"goal":{"x":207,"y":482},"rects":[[166,504,120,20],[139,368,135,15],[88,192,160,16],[13,446,80,21],[759,496,168,18],[454,102,57,81],[421,486,41,49],[735,21,150,24],[697,249,85,42],[380,278,102,23]],"hazards":[[169,403,67,17],[522,341,34,48],[140,154,56,16]],"guide":[[[167,118],[312,167]],[[432,166],[432,211],[306,257]],[[164,253],[164,298],[311,354]],[[457,355],[457,400],[320,442]]],"solveTime":5.8,"coins":[[242,122,5],[331,154,5],[383,205,5],[297,239,5],[245,300,5],[325,339,15],[377,396,5],[306,427,5]]},{"ball":{"x":262,"y":56},"goal":{"x":267,"y":467},"rects":[[227,489,118,20],[190,213,102,16],[224,180,83,15],[99,253,46,65],[792,222,90,20],[892,463,23,76],[594,57,46,66],[872,147,47,56],[765,105,48,60],[535,451,57,75]],"hazards":[[216,361,51,16],[792,349,114,15],[229,397,60,17]],"guide":[[[195,117],[353,162]],[[478,161],[478,206],[358,258]],[[237,249],[237,294],[357,345]],[[499,339],[499,384],[371,435]]],"solveTime":4.7,"coins":[[288,123,5],[365,145,5],[414,207,5],[351,239,5],[303,299,5],[370,330,15],[413,396,5],[355,422,5]]},{"ball":{"x":848,"y":39},"goal":{"x":719,"y":470},"rects":[[641,492,117,20],[809,171,43,66],[775,281,67,26],[350,370,89,16],[429,53,138,15],[335,506,64,15],[321,166,145,25],[130,152,21,132],[169,105,16,148],[23,324,159,19]],"hazards":[[757,330,72,18],[854,458,72,14],[737,172,46,45]],"guide":[[[881,109],[632,160]],[[504,161],[504,206],[631,250]],[[752,245],[752,290],[632,342]],[[493,338],[493,383],[613,435]]],"solveTime":6,"coins":[[796,106,5],[698,126,5],[603,151,5],[555,202,5],[648,237,5],[672,302,15],[592,357,5],[614,414,5]]},{"ball":{"x":741,"y":49},"goal":{"x":698,"y":486},"rects":[[621,508,115,20],[706,361,55,71],[690,203,126,15],[201,310,17,87],[48,105,19,122],[781,525,165,23],[84,349,22,123],[833,359,71,19],[121,204,45,83],[315,75,20,118],[135,139,161,25]],"hazards":[[724,309,43,31],[194,489,94,20],[700,166,114,16]],"guide":[[[792,118],[534,176]],[[373,178],[373,223],[563,272]],[[704,264],[704,309],[582,359]],[[441,362],[441,407],[594,463]]],"solveTime":6.8,"coins":[[687,121,5],[584,144,5],[487,184,5],[464,226,5],[567,252,5],[624,317,15],[543,378,5],[575,435,5]]},{"ball":{"x":218,"y":55},"goal":{"x":304,"y":482},"rects":[[267,504,113,20],[202,208,134,18],[139,170,144,20],[613,287,17,100],[859,223,23,165],[511,76,57,57],[33,151,24,104],[166,267,19,72],[102,26,49,77],[199,471,50,69],[771,294,49,60]],"hazards":[[275,382,96,18],[893,456,44,29],[223,343,34,30]],"guide":[[[188,122],[431,179]],[[581,171],[581,216],[395,275]],[[253,269],[253,314],[437,373]],[[569,369],[569,414],[411,462]]],"solveTime":7.5,"coins":[[293,126,5],[409,153,5],[504,217,5],[464,232,5],[356,278,5],[381,334,15],[483,389,5],[443,431,5]]},{"ball":{"x":759,"y":52},"goal":{"x":754,"y":492},"rects":[[679,514,112,20],[751,176,69,59],[718,402,87,22],[153,168,140,20],[261,479,130,26],[85,470,64,25],[433,517,140,23],[428,51,41,78],[187,29,68,85],[15,13,58,51],[39,99,14,83]],"hazards":[[744,360,55,17],[330,385,72,17]],"guide":[[[793,118],[660,173]],[[523,164],[523,209],[684,269]],[[826,265],[826,310],[610,370]],[[465,372],[465,417],[640,455]]],"solveTime":6.9,"coins":[[683,142,5],[590,211,5],[684,248,5],[768,304,5],[666,334,5],[560,384,15],[511,406,5],[628,432,5]]},{"ball":{"x":181,"y":63},"goal":{"x":234,"y":457},"rects":[[198,479,110,20],[129,163,79,41],[133,359,120,16],[742,263,162,24],[720,145,51,48],[859,392,83,18],[573,389,67,81],[596,14,18,72],[749,521,150,18],[552,294,71,70],[805,138,52,46]],"hazards":[[158,325,62,15],[53,381,30,45]],"guide":[[[135,118],[362,165]],[[481,156],[481,201],[343,251]],[[204,249],[204,294],[324,339]],[[468,332],[468,377],[331,435]]],"solveTime":5.8,"coins":[[235,118,5],[323,137,5],[405,171,5],[393,212,5],[312,250,5],[292,306,15],[362,357,5],[339,410,5]]}],[{"ball":{"x":160,"y":50},"goal":{"x":245,"y":485},"rects":[[204,507,120,20],[179,395,118,16],[143,190,116,19],[169,342,62,25],[587,445,118,23],[556,183,105,26],[693,200,77,24],[780,344,100,26],[38,338,17,168],[709,152,94,25]],"hazards":[[160,254,38,42],[803,511,48,31],[87,153,119,15]],"guide":[[[129,108],[324,156]],[[473,157],[473,202],[341,247]],[[219,245],[219,290],[339,349]],[[474,346],[474,391],[354,445]]],"solveTime":5.3,"coins":[[220,110,10],[329,137,10],[407,195,10],[336,227,10],[295,301,10],[382,368,10],[346,427,10]]},{"ball":{"x":797,"y":47},"goal":{"x":715,"y":472},"rects":[[637,494,119,20],[727,208,88,16],[737,361,69,57],[762,169,65,16],[446,440,22,74],[225,383,79,55],[326,16,50,86],[341,123,65,72],[851,393,71,47],[88,372,108,15]],"hazards":[[677,390,32,30],[227,273,33,47]],"guide":[[[852,119],[658,174]],[[511,166],[511,211],[652,267]],[[769,259],[769,304],[572,352]],[[443,345],[443,390],[596,439]]],"solveTime":6.7,"coins":[[748,128,10],[630,166,10],[617,232,10],[710,291,10],[628,318,10],[520,371,10],[599,419,10]]},{"ball":{"x":703,"y":37},"goal":{"x":746,"y":478},"rects":[[668,500,117,20],[664,162,153,16],[661,363,165,17],[697,207,74,15],[27,356,84,84],[824,234,43,76],[397,248,159,24],[455,456,46,52],[246,178,93,25],[377,143,18,65]],"hazards":[[707,400,124,14],[26,135,89,13]],"guide":[[[762,107],[623,152]],[[487,147],[487,192],[626,246]],[[773,247],[773,292],[627,339]],[[508,337],[508,382],[634,441]]],"solveTime":5,"coins":[[678,113,10],[586,157,10],[578,206,10],[666,257,10],[648,311,10],[576,378,10],[648,426,10]]},{"ball":{"x":820,"y":47},"goal":{"x":718,"y":510},"rects":[[641,532,116,20],[760,180,62,22],[760,245,70,16],[743,362,67,61],[58,275,16,114],[315,335,21,65],[279,203,89,49],[126,226,19,152],[14,426,160,15],[510,28,83,55],[238,260,14,79]],"hazards":[[677,407,43,46],[95,173,115,15],[744,447,61,17],[319,435,49,46]],"guide":[[[858,119],[687,179]],[[534,180],[534,225],[659,283]],[[796,281],[796,326],[604,375]],[[471,375],[471,420],[607,477]]],"solveTime":6,"coins":[[779,125,10],[672,164,10],[614,229,10],[699,299,10],[642,345,10],[552,404,10],[611,457,10]]},{"ball":{"x":734,"y":48},"goal":{"x":730,"y":507},"rects":[[654,529,114,20],[714,403,73,14],[734,203,72,24],[703,436,93,15],[307,183,49,87],[141,290,134,22],[261,492,69,16],[81,300,15,143],[883,339,21,72],[506,50,110,18],[375,302,23,105]],"hazards":[[742,247,52,12],[450,436,32,28]],"guide":[[[801,119],[681,175]],[[545,175],[545,220],[676,281]],[[814,277],[814,322],[656,382]],[[507,376],[507,421],[627,471]]],"solveTime":4.6,"coins":[[722,130,10],[642,183,10],[648,246,10],[723,304,10],[678,352,10],[605,411,10],[643,458,10]]},{"ball":{"x":720,"y":60},"goal":{"x":745,"y":478},"rects":[[669,500,113,20],[712,339,123,26],[664,184,134,17],[723,404,98,20],[119,207,137,24],[10,58,127,24],[864,136,70,16],[23,364,23,133],[362,218,19,82],[441,494,144,15],[244,399,15,104]],"hazards":[[734,306,75,15],[41,250,59,16],[742,227,31,39],[807,530,124,16]],"guide":[[[785,121],[592,176]],[[432,179],[432,224],[566,275]],[[696,272],[696,317],[540,363]],[[420,356],[420,401],[629,451]]],"solveTime":6.5,"coins":[[671,133,10],[561,171,10],[545,245,10],[612,315,10],[510,363,10],[514,403,10],[627,430,10]]},{"ball":{"x":766,"y":53},"goal":{"x":715,"y":476},"rects":[[640,498,111,20],[678,355,113,16],[685,392,68,18],[673,182,68,21],[415,286,127,15],[788,199,15,76],[331,166,18,124],[901,388,45,48],[277,52,14,126],[171,315,21,166],[46,283,18,161]],"hazards":[[759,168,54,12],[886,94,39,37]],"guide":[[[800,121],[650,166]],[[507,165],[507,210],[642,258]],[[760,255],[760,300],[597,360]],[[468,357],[468,402],[605,447]]],"solveTime":6,"coins":[[718,125,10],[613,168,10],[625,231,10],[699,296,10],[597,339,10],[515,394,10],[601,425,10]]},{"ball":{"x":742,"y":56},"goal":{"x":694,"y":491},"rects":[[619,513,110,20],[692,241,87,15],[709,356,69,25],[685,415,84,23],[232,398,47,63],[48,441,91,17],[827,109,22,137],[892,350,17,121],[152,94,20,170],[23,480,154,26],[346,323,22,152]],"hazards":[[680,179,39,30],[82,46,103,14],[740,155,30,46],[557,499,34,32]],"guide":[[[806,115],[580,175]],[[425,175],[425,220],[577,280]],[[730,277],[730,322],[597,376]],[[476,371],[476,416],[596,470]]],"solveTime":5.3,"coins":[[700,122,10],[599,149,10],[515,207,10],[562,253,10],[635,323,10],[570,374,10],[588,445,10]]},{"ball":{"x":756,"y":36},"goal":{"x":725,"y":469},"rects":[[651,491,108,20],[717,156,125,21],[719,196,60,25],[655,354,107,21],[226,68,92,21],[159,468,97,23],[836,305,23,62],[102,346,77,24],[77,89,80,18],[393,169,14,150],[74,134,80,80],[776,417,94,15]],"hazards":[[674,397,82,13],[149,509,75,13],[730,324,60,12],[155,241,49,37]],"guide":[[[799,110],[634,156]],[[501,154],[501,199],[630,247]],[[756,244],[756,289],[545,348]],[[411,348],[411,393],[615,448]]],"solveTime":6.7,"coins":[[691,119,10],[572,185,10],[617,221,10],[660,295,10],[525,335,10],[445,381,10],[580,418,10]]},{"ball":{"x":211,"y":56},"goal":{"x":206,"y":487},"rects":[[173,509,107,20],[119,164,120,15],[167,391,95,24],[159,207,65,46],[518,456,115,24],[780,17,18,167],[569,150,148,25],[773,277,121,18],[685,469,167,26],[678,293,24,96],[839,89,23,108],[525,52,19,87]],"hazards":[[174,312,50,16],[61,211,50,38],[123,276,92,17],[803,404,64,15],[177,355,93,18]],"guide":[[[170,115],[329,172]],[[486,174],[486,219],[365,277]],[[245,279],[245,324],[396,370]],[[508,365],[508,410],[320,458]]],"solveTime":5.9,"coins":[[261,126,10],[363,170,10],[386,244,10],[313,323,10],[397,349,10],[425,411,10],[316,438,10]]},{"ball":{"x":214,"y":63},"goal":{"x":279,"y":495},"rects":[[247,517,105,20],[264,377,67,24],[190,188,83,18],[197,422,77,21],[46,277,18,160],[882,150,15,167],[823,380,68,55],[868,487,80,54],[463,175,80,62],[748,189,54,59],[71,45,22,140],[87,505,91,23]],"hazards":[[169,224,68,12],[778,454,42,40],[205,352,32,38],[765,101,30,42]],"guide":[[[155,121],[301,173]],[[418,164],[418,209],[298,264]],[[171,265],[171,310],[359,362]],[[503,364],[503,409],[383,461]]],"solveTime":5.6,"coins":[[252,134,10],[344,185,10],[300,241,10],[233,301,10],[324,332,10],[412,385,10],[378,441,10]]},{"ball":{"x":169,"y":40},"goal":{"x":212,"y":467},"rects":[[179,489,104,20],[177,230,18,141],[142,187,126,22],[141,389,62,16],[655,307,142,15],[532,99,48,65],[740,463,20,78],[554,192,165,15],[892,25,53,69],[787,212,69,68],[561,242,14,139],[879,214,15,109]],"hazards":[[222,361,32,33],[439,22,33,31],[137,151,62,18],[344,517,40,31]],"guide":[[[123,108],[308,160]],[[463,158],[463,203],[343,259]],[[227,251],[227,296],[372,348]],[[499,343],[499,388],[321,441]]],"solveTime":5.7,"coins":[[212,112,10],[320,143,10],[389,205,10],[307,269,10],[353,320,10],[427,382,10],[325,419,10]]},{"ball":{"x":733,"y":45},"goal":{"x":634,"y":501},"rects":[[563,523,103,20],[673,283,62,17],[629,368,69,55],[666,222,94,24],[833,370,77,54],[114,327,41,78],[173,363,64,76],[831,66,101,22],[43,90,23,76],[825,462,61,86],[259,325,65,79],[59,185,20,87],[427,39,23,96]],"hazards":[[671,186,75,16],[186,83,101,15],[710,151,70,14],[319,26,76,19],[677,332,55,18]],"guide":[[[776,110],[586,164]],[[423,166],[423,211],[543,261]],[[650,261],[650,306],[530,361]],[[386,362],[386,407],[530,466]]],"solveTime":5,"coins":[[687,114,10],[581,145,10],[504,221,10],[568,256,10],[564,323,10],[479,389,10],[531,445,10]]},{"ball":{"x":714,"y":50},"goal":{"x":608,"y":495},"rects":[[538,517,101,20],[689,157,55,68],[631,356,114,21],[563,396,152,20],[56,418,56,75],[156,112,108,21],[857,110,65,68],[141,73,131,16],[836,253,23,113],[204,297,62,47],[101,213,106,16],[787,449,23,61],[209,514,152,21]],"hazards":[[632,171,39,45],[403,493,45,50],[638,436,57,16],[65,16,37,37]],"guide":[[[764,113],[531,172]],[[407,165],[407,210],[558,257]],[[685,258],[685,303],[479,362]],[[321,358],[321,403],[497,463]]],"solveTime":7.1,"coins":[[636,125,10],[500,165,10],[469,208,10],[599,263,10],[537,325,10],[418,394,10],[471,433,10]]},{"ball":{"x":215,"y":46},"goal":{"x":305,"y":504},"rects":[[275,526,100,20],[284,377,60,44],[130,169,150,20],[192,208,110,19],[27,320,18,67],[586,73,42,69],[412,18,75,78],[846,231,54,87],[589,332,140,25],[747,55,148,22],[790,130,24,130],[574,197,86,24],[563,501,83,45]],"hazards":[[221,340,32,45],[659,405,90,14],[228,418,38,37],[59,519,106,16]],"guide":[[[163,112],[369,172]],[[502,167],[502,212],[376,263]],[[227,263],[227,308],[371,362]],[[521,363],[521,408],[401,466]]],"solveTime":5.3,"coins":[[253,117,10],[356,147,10],[439,210,10],[368,245,10],[325,318,10],[411,377,10],[400,444,10]]},{"ball":{"x":768,"y":60},"goal":{"x":747,"y":485},"rects":[[678,507,98,20],[766,164,47,70],[715,375,123,20],[728,417,99,15],[294,245,20,131],[105,397,61,88],[217,22,18,160],[76,139,54,47],[241,527,71,17],[400,37,42,69],[121,305,100,23],[882,174,18,136],[105,231,154,16]],"hazards":[[703,192,43,30],[829,110,42,28],[762,337,63,14],[361,463,109,12]],"guide":[[[804,115],[564,170]],[[438,166],[438,211],[644,270]],[[769,268],[769,313],[620,364]],[[485,365],[485,410],[640,449]]],"solveTime":7,"coins":[[684,122,10],[551,153,10],[501,208,10],[632,246,10],[709,312,10],[585,366,10],[621,424,10]]},{"ball":{"x":205,"y":52},"goal":{"x":236,"y":492},"rects":[[208,514,97,20],[180,371,99,17],[211,197,70,23],[155,408,76,14],[551,75,73,58],[599,382,52,60],[14,129,125,14],[846,422,80,21],[733,128,133,16],[674,351,143,23],[464,464,162,18],[430,50,61,77],[10,40,125,24]],"hazards":[[155,163,76,15],[442,292,33,38],[160,240,67,13],[655,42,36,28]],"guide":[[[174,124],[357,181]],[[504,176],[504,221],[310,276]],[[184,275],[184,320],[346,364]],[[491,360],[491,405],[338,464]]],"solveTime":6.5,"coins":[[265,131,10],[388,176,10],[388,233,10],[269,283,10],[257,319,10],[379,363,10],[364,433,10]]},{"ball":{"x":217,"y":52},"goal":{"x":353,"y":494},"rects":[[325,516,95,20],[240,366,106,23],[150,181,163,24],[235,407,90,25],[30,330,24,157],[719,150,72,17],[885,46,22,139],[843,411,60,55],[275,40,160,21],[610,218,71,64],[75,91,17,124],[654,398,16,89],[801,306,71,20],[159,281,18,116]],"hazards":[[210,262,49,34],[701,497,60,14],[223,230,124,14],[806,259,82,15],[231,327,55,13],[235,473,41,37]],"guide":[[[164,112],[421,173]],[[557,171],[557,216],[437,271]],[[300,267],[300,312],[426,362]],[[566,356],[566,401],[446,459]]],"solveTime":5.3,"coins":[[265,115,10],[369,140,10],[468,179,10],[457,240,10],[382,311,10],[455,363,10],[450,435,10]]},{"ball":{"x":168,"y":48},"goal":{"x":209,"y":491},"rects":[[182,513,94,20],[146,243,56,74],[90,201,144,17],[113,343,156,18],[683,274,73,88],[788,413,78,19],[72,437,47,63],[908,328,19,63],[15,264,88,56],[430,451,79,15],[569,412,140,21],[552,287,76,42],[558,137,71,46],[896,205,44,43]],"hazards":[[130,384,118,18],[747,182,43,41],[150,422,95,14],[78,140,40,43],[164,167,88,14],[739,453,100,13]],"guide":[[[129,111],[342,165]],[[490,161],[490,206],[370,258]],[[255,259],[255,304],[375,361]],[[496,360],[496,405],[320,453]]],"solveTime":5.9,"coins":[[222,114,10],[335,143,10],[418,214,10],[335,268,10],[375,339,10],[430,402,10],[318,433,10]]},{"ball":{"x":242,"y":50},"goal":{"x":205,"y":496},"rects":[[180,518,92,20],[185,196,91,22],[126,356,116,15],[157,393,88,15],[824,475,63,68],[759,425,24,68],[458,118,72,24],[672,143,21,64],[643,339,72,78],[803,117,67,70],[625,18,21,87],[876,262,23,119],[24,304,87,18],[558,434,57,47]],"hazards":[[119,427,112,14],[569,253,123,17],[177,164,51,12],[388,500,36,45],[178,237,57,14],[737,282,62,19]],"guide":[[[185,117],[312,176]],[[437,169],[437,214],[305,270]],[[158,264],[158,309],[410,368]],[[561,360],[561,405],[320,460]]],"solveTime":7,"coins":[[295,146,10],[362,224,10],[253,302,10],[294,320,10],[429,354,10],[475,404,10],[339,435,10]]},{"ball":{"x":806,"y":51},"goal":{"x":555,"y":506},"rects":[[490,528,91,20],[715,208,67,24],[574,390,140,14],[734,172,60,16],[185,488,160,23],[249,48,20,86],[251,296,78,14],[98,211,17,94],[880,177,49,82],[89,451,42,54],[850,373,16,93],[347,273,68,19],[720,456,46,57],[513,49,47,48]],"hazards":[[531,422,128,12],[271,170,35,49],[722,251,37,34],[103,139,61,13],[656,358,53,14],[603,453,84,15]],"guide":[[[862,121],[621,177]],[[470,179],[470,224],[590,283]],[[699,280],[699,325],[460,382]],[[322,375],[322,420],[454,475]]],"solveTime":6.5,"coins":[[749,127,10],[623,156,10],[546,228,10],[637,314,10],[551,340,10],[427,377,10],[432,444,10]]},{"ball":{"x":729,"y":38},"goal":{"x":701,"y":498},"rects":[[636,520,89,20],[650,360,135,15],[718,160,22,68],[661,409,74,17],[849,85,96,23],[373,192,69,65],[368,470,86,69],[226,401,86,16],[247,455,51,80],[832,202,85,14],[152,271,23,62],[323,318,77,16],[274,90,14,86],[35,246,65,74]],"hazards":[[736,286,31,32],[426,283,101,15],[657,189,39,44],[236,215,80,13]],"guide":[[[793,109],[608,159]],[[471,153],[471,198],[594,255]],[[713,255],[713,300],[591,354]],[[442,355],[442,400],[600,459]]],"solveTime":5,"coins":[[701,113,10],[600,140,10],[550,205,10],[632,266,10],[599,329,10],[531,403,10],[606,440,10]]},{"ball":{"x":827,"y":45},"goal":{"x":745,"y":470},"rects":[[680,492,88,20],[762,182,83,17],[694,365,151,15],[714,399,78,19],[214,415,70,25],[364,344,73,16],[116,493,103,25],[184,260,22,98],[355,445,121,16],[480,220,17,89],[614,11,55,52],[59,155,135,14],[237,490,71,18],[253,199,109,18],[250,300,16,76]],"hazards":[[774,330,70,17],[427,151,32,50],[763,217,61,14],[881,205,32,43],[798,147,101,13],[826,282,76,16]],"guide":[[[871,105],[661,162]],[[525,164],[525,209],[655,258]],[[789,254],[789,299],[620,344]],[[492,344],[492,389],[640,432]]],"solveTime":7,"coins":[[775,110,10],[665,140,10],[586,207,10],[679,251,10],[663,312,10],[573,370,10],[641,411,10]]},{"ball":{"x":194,"y":58},"goal":{"x":306,"y":480},"rects":[[284,502,86,20],[147,168,68,22],[185,337,71,20],[201,386,86,20],[507,146,79,90],[605,70,14,161],[557,478,160,15],[652,72,77,42],[661,416,66,40],[51,308,19,147],[775,484,75,55],[655,234,74,22],[441,14,22,124],[45,40,83,15],[427,255,156,19]],"hazards":[[171,210,81,13],[519,434,59,17],[307,365,42,48],[91,302,68,16]],"guide":[[[131,118],[318,168]],[[433,161],[433,206],[313,255]],[[189,247],[189,292],[410,347]],[[568,349],[568,394],[406,452]]],"solveTime":6.6,"coins":[[248,129,10],[358,172,10],[344,221,10],[256,282,10],[360,314,10],[462,367,10],[422,425,10]]},{"ball":{"x":237,"y":55},"goal":{"x":398,"y":497},"rects":[[376,519,85,20],[214,167,87,16],[328,300,24,140],[206,220,166,14],[650,315,156,16],[40,451,78,85],[64,342,153,15],[833,37,47,59],[549,46,127,23],[191,424,87,86],[834,334,114,20],[15,238,147,16],[43,79,133,18],[714,363,14,131],[356,72,123,18]],"hazards":[[381,373,37,31],[873,487,43,41],[265,259,32,46],[733,187,127,14],[378,425,59,16],[766,256,120,14]],"guide":[[[198,117],[462,178]],[[623,180],[623,225],[499,283]],[[380,279],[380,324],[554,382]],[[685,375],[685,420],[501,469]]],"solveTime":6.6,"coins":[[303,121,10],[427,149,10],[532,212,10],[470,283,10],[517,348,10],[614,415,10],[523,443,10]]}]];
+const CHAPTERS = [
+  { name: 'Easy' },
+  { name: 'Normal' },
+  { name: 'Maddraw' },
+  { name: 'Final Draw' }
+];
+
+const FONT = '"Noto Sans","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif';
+const GREEN = '#2f9e55';
+const MAX_POINTS = 4000;     // safety cap on total doodle points per level
+
+const THEMES = {
+  light: {
+    skyTop: '#4fb3ff', skyBot: '#e2f5ff', cloud: '255,255,255', cloudA: 0.92,
+    text: '#17406f', hudFill: 'rgba(255,255,255,0.92)', hudOn: '#d8f5e8', hudStroke: '#2a6fc0', hudText: '#1d4f9c',
+    blockTop: '#ffffff', blockBot: '#c9d8f2', blockEdge: '#6a86bd',
+    hazTop: '#ff9d9d', hazBot: '#e24a4a', hazEdge: '#a02222', hazHatch: 'rgba(120,20,20,0.3)',
+    guide: '#12a371', guideText: '#ffffff', overlay: 'rgba(226,245,255,0.9)', win: '#1f9d55', underlay: null
+  },
+  dark: {
+    skyTop: '#070a24', skyBot: '#2b3070', cloud: '150,160,235', cloudA: 0.2,
+    text: '#e8ecff', hudFill: 'rgba(18,24,62,0.9)', hudOn: '#1d5a45', hudStroke: '#8fa2ff', hudText: '#dfe5ff',
+    blockTop: '#4a5391', blockBot: '#2a3162', blockEdge: '#9aabff',
+    hazTop: '#ff8a8a', hazBot: '#c93a3a', hazEdge: '#ffb3b3', hazHatch: 'rgba(60,0,0,0.35)',
+    guide: '#5df2b0', guideText: '#08261b', overlay: 'rgba(8,12,40,0.88)', win: '#5ee08f', underlay: 'rgba(255,255,255,0.55)'
+  }
+};
+const TH = () => THEMES[save.settings.theme] || THEMES.light;
+
+/* ---------------- save data ---------------- */
+const SAVE_KEY = 'doodleBallSave_v3', OLD_KEY = 'doodleBallSave_v2';
+const save = {
+  settings: { fps: 90, showFps: false, ads: false, skin: 'classic', color: 'ink', theme: 'light', view: null, musicOn: true, sfxOn: true, musicVol: 60, sfxVol: 80 },
+  done: {}, last: [0, 0], coins: 0, owned: {}, got: {}, adOff: 0, tries: {}, chapDone: {}
+};
+let resetting = false;
+try {
+  let raw = localStorage.getItem(SAVE_KEY), migrated = false;
+  if (!raw) { raw = localStorage.getItem(OLD_KEY); migrated = !!raw; }
+  if (raw) {
+    const o = JSON.parse(raw);
+    Object.assign(save.settings, o.settings || {});
+    if (migrated) save.settings.fps = 90;        // the game now runs at 90 by default
+    save.done = o.done || {};
+    if (Array.isArray(o.last)) save.last = o.last;
+    save.coins = Number(o.coins) || 0;
+    save.owned = o.owned || {};
+    save.got = o.got || {};
+    save.adOff = Number(o.adOff) || 0;
+    save.tries = o.tries || {};
+    save.chapDone = o.chapDone || {};
+  }
+} catch (e) {}
+save.owned.classic = save.owned.ink = save.owned.graphite = true;      // the free starters
+if (!save.owned[save.settings.skin]) save.settings.skin = 'classic';
+if (!save.owned[save.settings.color]) save.settings.color = 'ink';
+if (save.settings.view !== 'desktop' && save.settings.view !== 'mobile') save.settings.view = null;   // null = ask on first launch
+for (const k of ['musicVol', 'sfxVol']) save.settings[k] = Math.max(0, Math.min(100, Number(save.settings[k]) || 0));
+function persist() { if (resetting) return; try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} }
+function applyTheme() { document.documentElement.dataset.theme = save.settings.theme; }
+
+/* ---------------- skins ---------------- */
+const BALL_SKINS = [
+  { id: 'classic', name: 'Classic', price: 0 },
+  { id: 'mint',    name: 'Mint',    price: 20, free: 'Chapter 1' },
+  { id: 'beach',   name: 'Beach',   price: 20, free: 'Chapter 2' },
+  { id: 'eight',   name: 'Eight',   price: 35 },
+  { id: 'basket',  name: 'Hoops',   price: 35 },
+  { id: 'smiley',  name: 'Smiley',  price: 35 },
+  { id: 'galaxy',  name: 'Galaxy',  price: 50 }
+];
+const COLORS = [
+  { id: 'ink',      name: 'Ink Blue', c: '#26358f', price: 0 },
+  { id: 'graphite', name: 'Graphite', c: '#3b3f4a', price: 0 },
+  { id: 'forest',   name: 'Forest',   c: '#1f7a4d', price: 20 },
+  { id: 'violet',   name: 'Violet',   c: '#6f42c1', price: 20 },
+  { id: 'orange',   name: 'Orange',   c: '#e8710a', price: 20 },
+  { id: 'pink',     name: 'Pink',     c: '#d6336c', price: 20 },
+  { id: 'teal',     name: 'Teal',     c: '#0b7285', price: 20 },
+  { id: 'rainbow',  name: 'Rainbow',  c: null,      price: 99999 }
+];
+const CHAPTER_REWARDS = { 0: 'mint', 1: 'beach' };   // finishing all 25 levels of a chapter gives this ball skin free
+const RICKROLL = 'https://www.youtube.com/watch?v=dQw4w9WgXcQ';
+const COIN_R = 11;
+
+// Draws a shaded, glossy ball centered on (0,0). The pattern spins with `angle`;
+// the lighting (highlight + shadow) stays fixed so it reads as a real 3D sphere.
+function drawBallSkin(c, id, r, active, angle) {
+  const BASE = {
+    classic: ['#ffe680', '#f0a01a'], mint: ['#c4f7e2', '#2fc596'], beach: ['#ffffff', '#d8dde6'],
+    eight: ['#5b6172', '#0c0e15'], basket: ['#ffbd7a', '#dc6a14'], smiley: ['#fff39a', '#f1b000'],
+    galaxy: ['#7a68e8', '#171a58']
+  };
+  const base = BASE[id] || BASE.classic;
+  const TAU = Math.PI * 2;
+  c.save();
+  if (!active) c.globalAlpha = 0.93;
+
+  // body with a soft drop shadow
+  c.shadowColor = 'rgba(15, 30, 80, 0.38)';
+  c.shadowBlur = r * 0.55;
+  c.shadowOffsetY = r * 0.2;
+  const body = c.createRadialGradient(-r * 0.35, -r * 0.4, r * 0.1, 0, 0, r);
+  body.addColorStop(0, base[0]); body.addColorStop(1, base[1]);
+  c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = body; c.fill();
+  c.shadowColor = 'transparent';
+
+  // pattern (rotates with the ball)
+  c.save();
+  c.beginPath(); c.arc(0, 0, r, 0, TAU); c.clip();
+  c.rotate(angle || 0);
+  if (id === 'mint') {
+    c.fillStyle = 'rgba(255,255,255,0.85)';
+    for (const d of [[-0.5, -0.35, 0.15], [0.45, -0.45, 0.13], [0.05, 0.05, 0.16], [-0.4, 0.55, 0.13], [0.6, 0.4, 0.14], [-0.85, 0.1, 0.1], [0.85, -0.05, 0.1]]) {
+      c.beginPath(); c.arc(d[0] * r, d[1] * r, d[2] * r, 0, TAU); c.fill();
+    }
+  } else if (id === 'beach') {
+    const cols = ['#ff6b6b', '#fff3d1', '#4dabf7', '#ffd84d', '#fff3d1', '#69db7c'];
+    for (let k = 0; k < 6; k++) {
+      c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r * 1.05, (k * Math.PI) / 3, ((k + 1) * Math.PI) / 3); c.closePath();
+      c.fillStyle = cols[k]; c.fill();
+    }
+    c.beginPath(); c.arc(0, 0, r * 0.16, 0, TAU); c.fillStyle = '#ffffff'; c.fill();
+  } else if (id === 'eight') {
+    c.beginPath(); c.arc(0, 0, r * 0.52, 0, TAU); c.fillStyle = '#f5f5f5'; c.fill();
+    c.fillStyle = '#111'; c.font = `700 ${r * 0.78}px ${FONT}`; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText('8', 0, r * 0.05);
+  } else if (id === 'basket') {
+    c.strokeStyle = '#5a2e0c'; c.lineWidth = Math.max(1.2, r * 0.09);
+    c.beginPath(); c.moveTo(-r, 0); c.lineTo(r, 0); c.moveTo(0, -r); c.lineTo(0, r); c.stroke();
+    c.beginPath(); c.arc(-r * 1.15, 0, r * 0.95, -0.95, 0.95); c.stroke();
+    c.beginPath(); c.arc(r * 1.15, 0, r * 0.95, Math.PI - 0.95, Math.PI + 0.95); c.stroke();
+  } else if (id === 'smiley') {
+    c.fillStyle = '#5a3b00';
+    c.beginPath(); c.ellipse(-r * 0.34, -r * 0.18, r * 0.11, r * 0.16, 0, 0, TAU); c.fill();
+    c.beginPath(); c.ellipse(r * 0.34, -r * 0.18, r * 0.11, r * 0.16, 0, 0, TAU); c.fill();
+    c.strokeStyle = '#5a3b00'; c.lineWidth = Math.max(1.4, r * 0.1); c.lineCap = 'round';
+    c.beginPath(); c.arc(0, r * 0.05, r * 0.52, 0.3, Math.PI - 0.3); c.stroke();
+  } else if (id === 'galaxy') {
+    const neb = c.createRadialGradient(r * 0.3, r * 0.2, 0, r * 0.3, r * 0.2, r * 0.9);
+    neb.addColorStop(0, 'rgba(255,120,210,0.65)'); neb.addColorStop(1, 'rgba(255,120,210,0)');
+    c.fillStyle = neb; c.fillRect(-r, -r, r * 2, r * 2);
+    c.fillStyle = '#ffffff';
+    for (const s of [[-0.45, -0.5, 0.09], [0.55, -0.25, 0.07], [-0.1, 0.45, 0.08], [0.35, 0.6, 0.05], [-0.65, 0.15, 0.06], [0.1, -0.15, 0.05]]) {
+      c.beginPath(); c.arc(s[0] * r, s[1] * r, s[2] * r, 0, TAU); c.fill();
+    }
+  } else { // classic: a rolling stripe
+    c.fillStyle = 'rgba(190, 90, 0, 0.38)';
+    c.fillRect(-r * 1.1, -r * 0.16, r * 2.2, r * 0.32);
+    c.fillStyle = 'rgba(255, 255, 255, 0.35)';
+    c.beginPath(); c.arc(r * 0.45, r * 0.5, r * 0.12, 0, TAU); c.fill();
+    c.beginPath(); c.arc(-r * 0.5, -r * 0.55, r * 0.09, 0, TAU); c.fill();
+  }
+  c.restore();
+
+  // lighting overlay (does NOT rotate): rim shadow + soft highlight
+  const sh = c.createRadialGradient(-r * 0.4, -r * 0.45, r * 0.05, -r * 0.1, -r * 0.1, r * 1.05);
+  sh.addColorStop(0, 'rgba(255,255,255,0.6)');
+  sh.addColorStop(0.3, 'rgba(255,255,255,0.1)');
+  sh.addColorStop(0.7, 'rgba(0,0,40,0)');
+  sh.addColorStop(1, 'rgba(0,0,40,0.4)');
+  c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fillStyle = sh; c.fill();
+  c.lineWidth = Math.max(1, r * 0.06);
+  c.strokeStyle = 'rgba(10, 20, 60, 0.4)';
+  c.stroke();
+
+  // glossy specular spot
+  c.beginPath(); c.ellipse(-r * 0.36, -r * 0.42, r * 0.21, r * 0.12, -0.7, 0, TAU);
+  c.fillStyle = 'rgba(255,255,255,0.85)'; c.fill();
+  c.restore();
+}
+
+function colorValue(id) { const o = COLORS.find(x => x.id === id) || COLORS[0]; return o.c; }
+
+// Draws a doodle stroke (array of {x,y}) in the chosen color.
+function drawPolyline(c, pts, colorId, width) {
+  const under = TH().underlay;               // dark theme: soft light edge so ink stays visible
+  c.lineWidth = width; c.lineCap = 'round'; c.lineJoin = 'round';
+  if (pts.length === 1) {
+    if (under) { c.fillStyle = under; c.beginPath(); c.arc(pts[0].x, pts[0].y, width / 2 + 2, 0, Math.PI * 2); c.fill(); }
+    c.fillStyle = colorId === 'rainbow' ? 'hsl(0,80%,52%)' : colorValue(colorId);
+    c.beginPath(); c.arc(pts[0].x, pts[0].y, width / 2, 0, Math.PI * 2); c.fill();
+    return;
+  }
+  const path = () => {
+    c.beginPath(); c.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i].x, pts[i].y);
+  };
+  if (under) { c.lineWidth = width + 4; c.strokeStyle = under; path(); c.stroke(); c.lineWidth = width; }
+  if (colorId === 'rainbow') {
+    for (let i = 1; i < pts.length;) {
+      c.strokeStyle = `hsl(${(Math.floor(i / 6) * 25) % 360},80%,52%)`;
+      c.beginPath(); c.moveTo(pts[i - 1].x, pts[i - 1].y);
+      let j = i;
+      for (; j < pts.length && j < i + 6; j++) c.lineTo(pts[j].x, pts[j].y);
+      c.stroke();
+      i = j;
+    }
+    return;
+  }
+  c.strokeStyle = colorValue(colorId);
+  path(); c.stroke();
+}
+
+/* ---------------- sound: relaxing music + sound effects, all synthesized (no audio files) ---------------- */
+const SND = (() => {
+  let ac = null, musicIn = null, musicBus = null, sfxBus = null, noiseBuf = null;
+  let started = false, timer = 0, nextT = 0, stepN = 0, mel = 3, unlocked = false, lastHitAt = 0;
+  const BEAT = 60 / 64;                                   // slow, calm tempo
+  const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+  const CHORDS = [[48, 55, 59, 64, 67], [45, 52, 55, 60, 64], [41, 48, 52, 57, 60], [43, 50, 55, 59, 62]];   // C  Am  F  G
+  const MEL = [72, 74, 76, 79, 81, 84, 86];               // C major pentatonic-ish bell notes
+
+  function ensure() {
+    if (ac) return ac;
+    const AC = typeof AudioContext !== 'undefined' ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+    if (!AC) return null;
+    try { ac = new AC(); } catch (e) { ac = null; return null; }
+    const comp = ac.createDynamicsCompressor();
+    comp.connect(ac.destination);
+    musicBus = ac.createGain(); musicBus.connect(comp);
+    sfxBus = ac.createGain(); sfxBus.connect(comp);
+    musicIn = ac.createGain(); musicIn.connect(musicBus);                       // dry music
+    const conv = ac.createConvolver(), wet = ac.createGain();                   // soft reverb for the music
+    const len = Math.floor(ac.sampleRate * 2.4), buf = ac.createBuffer(2, len, ac.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.6);
+    }
+    conv.buffer = buf; wet.gain.value = 0.55;
+    musicIn.connect(wet); wet.connect(conv); conv.connect(musicBus);
+    noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+    const nd = noiseBuf.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    applyVolumes();
+    return ac;
+  }
+
+  function applyVolumes() {
+    if (!ac) return;
+    const s = save.settings, t = ac.currentTime;
+    musicBus.gain.setTargetAtTime(s.musicOn ? (s.musicVol / 100) * 0.9 : 0, t, 0.08);
+    sfxBus.gain.setTargetAtTime(s.sfxOn ? s.sfxVol / 100 : 0, t, 0.03);
+  }
+
+  /* ----- music ----- */
+  function padChord(t, chord) {
+    const dur = BEAT * 4;
+    chord.forEach((m, idx) => {
+      for (const det of [-4, 5]) {
+        const o = ac.createOscillator(), g = ac.createGain(), f = ac.createBiquadFilter();
+        o.type = idx < 2 ? 'sine' : 'triangle';
+        o.frequency.value = mtof(m); o.detune.value = det;
+        f.type = 'lowpass'; f.frequency.value = 1300;
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.03, t + 1.4);
+        g.gain.setValueAtTime(0.03, t + dur - 0.3);
+        g.gain.linearRampToValueAtTime(0.0001, t + dur + 1.7);
+        o.connect(f); f.connect(g); g.connect(musicIn);
+        o.start(t); o.stop(t + dur + 1.8);
+      }
+    });
+    const b = ac.createOscillator(), bg = ac.createGain();                      // soft bass note
+    b.type = 'sine'; b.frequency.value = mtof(chord[0] - 12);
+    bg.gain.setValueAtTime(0.0001, t);
+    bg.gain.linearRampToValueAtTime(0.08, t + 0.6);
+    bg.gain.linearRampToValueAtTime(0.0001, t + dur + 0.8);
+    b.connect(bg); bg.connect(musicIn); b.start(t); b.stop(t + dur + 1);
+  }
+  function bell(t, midi, vel) {
+    const o = ac.createOscillator(), o2 = ac.createOscillator(), g = ac.createGain(), g2 = ac.createGain();
+    o.type = 'sine'; o.frequency.value = mtof(midi);
+    o2.type = 'sine'; o2.frequency.value = mtof(midi) * 2.005; g2.gain.value = 0.22;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vel, t + 0.015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 1.9);
+    o.connect(g); o2.connect(g2); g2.connect(g); g.connect(musicIn);
+    o.start(t); o2.start(t); o.stop(t + 2); o2.stop(t + 2);
+  }
+  function scheduleStep(t, n) {
+    const pos = n % 8, chord = CHORDS[Math.floor(n / 8) % 4];
+    if (pos === 0) padChord(t, chord);
+    if (Math.random() < (pos % 2 === 0 ? 0.5 : 0.26)) {                         // gentle random-walk melody
+      mel = Math.max(0, Math.min(MEL.length - 1, mel + [-2, -1, -1, 0, 1, 1, 2][Math.floor(Math.random() * 7)]));
+      bell(t, MEL[mel], 0.03 + Math.random() * 0.028);
+    }
+  }
+  function tick() {
+    if (!ac || !started) return;
+    while (nextT < ac.currentTime + 0.5) { scheduleStep(nextT, stepN++); nextT += BEAT / 2; }
+  }
+  function startMusic() {
+    if (!ac || started) return;
+    started = true; nextT = ac.currentTime + 0.15;
+    timer = setInterval(tick, 120);
+  }
+  function stopMusic() { started = false; clearInterval(timer); }
+  function syncMusic() {
+    if (!ac) return;
+    if (save.settings.musicOn && !(typeof document !== 'undefined' && document.hidden)) startMusic(); else stopMusic();
+  }
+  function unlock() {
+    if (!ensure()) return;
+    if (ac.state === 'suspended' && ac.resume) ac.resume();
+    unlocked = true;
+    applyVolumes(); syncMusic();
+  }
+
+  /* ----- sound effects ----- */
+  function ready() {
+    if (!save.settings.sfxOn || !ensure()) return false;
+    if (ac.state === 'suspended' && ac.resume) ac.resume();
+    return true;
+  }
+  function tone(type, f0, f1, t, dur, vol, atk) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.setValueAtTime(f0, t);
+    if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + (atk || 0.005));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + (atk || 0.005) + dur);
+    o.connect(g); g.connect(sfxBus); o.start(t); o.stop(t + dur + 0.06);
+  }
+  function whoosh(t, dur, vol, f0, f1) {
+    const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = noiseBuf; f.type = 'bandpass'; f.Q.value = 1.2;
+    f.frequency.setValueAtTime(f0, t); f.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + dur * 0.35);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    s.connect(f); f.connect(g); g.connect(sfxBus); s.start(t); s.stop(t + dur + 0.05);
+  }
+  const arp = (notes, gap, vol, dur, type) => { const t = ac.currentTime; notes.forEach((f, i) => tone(type || 'sine', f, f, t + i * gap, dur, vol)); };
+
+  return {
+    unlock, applyVolumes, syncMusic, tick,
+    get unlocked() { return unlocked; },
+    click()  { if (!ready()) return; const t = ac.currentTime; tone('triangle', 780, 540, t, 0.07, 0.22); },
+    coin()   { if (!ready()) return; const t = ac.currentTime; tone('sine', 1319, 1319, t, 0.16, 0.2); tone('sine', 1760, 1760, t + 0.07, 0.24, 0.2); },
+    start()  { if (!ready()) return; whoosh(ac.currentTime, 0.32, 0.16, 500, 1700); },
+    hit(power) {
+      if (!ready()) return;
+      const now = performance.now();
+      if (now - lastHitAt < 90) return;
+      lastHitAt = now;
+      const v = Math.min(0.3, power / 2600), t = ac.currentTime;
+      tone('sine', 170, 70, t, 0.14, v);
+      whoosh(t, 0.06, v * 0.6, 1800, 900);
+    },
+    fail()   { if (!ready()) return; const t = ac.currentTime; tone('triangle', 340, 110, t, 0.42, 0.26); tone('sine', 220, 80, t + 0.05, 0.4, 0.18); },
+    win()    { if (!ready()) return; arp([523, 659, 784, 1047], 0.09, 0.2, 0.5, 'sine'); arp([523, 659, 784, 1047], 0.09, 0.07, 0.5, 'triangle'); },
+    chapter() {
+      if (!ready()) return;
+      const t = ac.currentTime;
+      [[523, 659, 784], [587, 740, 880], [659, 784, 988], [784, 988, 1175, 1568]].forEach((ch, i) =>
+        ch.forEach(f => tone('sine', f, f, t + i * (i === 3 ? 0.2 : 0.17) + (i === 3 ? 0.08 : 0), i === 3 ? 1.4 : 0.35, 0.13)));
+      [1568, 1976, 2349, 2093, 2637].forEach((f, i) => tone('sine', f, f, t + 0.9 + i * 0.09, 0.4, 0.07));
+    },
+    buy()    { if (!ready()) return; const t = ac.currentTime; tone('sine', 988, 988, t, 0.1, 0.2); tone('sine', 1319, 1319, t + 0.08, 0.12, 0.2); tone('sine', 1976, 1976, t + 0.16, 0.3, 0.2); },
+    boxShake() { if (!ready()) return; const t = ac.currentTime; for (let i = 0; i < 7; i++) tone('square', 160 + i * 14, 120 + i * 10, t + i * 0.1, 0.05, 0.1); },
+    boxOpen()  { if (!ready()) return; const t = ac.currentTime; whoosh(t, 0.5, 0.22, 300, 3200); [784, 988, 1175, 1568].forEach((f, i) => tone('sine', f, f, t + 0.05 + i * 0.06, 0.8, 0.12)); },
+    cardFlip() { if (!ready()) return; const t = ac.currentTime; whoosh(t, 0.3, 0.14, 900, 2600); tone('sine', 1568, 1568, t + 0.28, 0.5, 0.14); tone('sine', 2093, 2093, t + 0.36, 0.6, 0.12); }
+  };
+})();
+
+/* ---------------- game state ---------------- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+/* ---------------- views: Desktop View / Mobile View ----------------
+   The playfield is always the 960 x 600 world. A view decides where it sits on the screen:
+     Desktop View: the canvas keeps the 16:10 shape (scale s = canvasWidth / 960).
+     Mobile View : the canvas fills the WHOLE screen (under notches and rounded corners). The playfield is
+                   fitted into the safe area below the buttons:  s = min(areaW / 960, areaH / 600),
+                   centered:  ox = areaX + (areaW - 960 s) / 2,  oy = areaY + (areaH - 600 s) / 2.
+                   The sky, clouds, stars and the red danger zone are painted over every pixel, so no corner is empty. */
+let SCALE = 1;                                  // device pixels per world unit
+let view = { mode: 'desktop', vw: W, vh: H, K: 1, s: 1, ox: 0, oy: 0 };   // sizes in CSS px; K = device px per CSS px
+let HUD = null;                                 // button layout for the current view
+let bgCache = null, bgKey = '', layerCache = null, layerKey = '';
+const ballSprites = new Map();
+const cloudSprites = [];
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+function invalidateCaches() { bgCache = null; layerCache = null; ballSprites.clear(); cloudSprites.length = 0; coinSprites.clear(); }
+
+// Mobile layout: HUD buttons stay inside the safe area; the playfield is fitted below them.
+function layoutMobile(vw, vh, ins) {
+  const portrait = vw < 640 || vh > vw;
+  const x0 = ins.left + 10, x1 = vw - ins.right - 10;
+  let btns, coin, label, hint, hudBottom;
+  if (portrait) {                                              // two button rows + level name
+    const y1 = ins.top + 8, bh = 40, y2 = y1 + 46;
+    btns = [
+      { id: 'menu',     x: x0,           y: y1, w: 70, h: bh },
+      { id: 'settings', x: x0 + 78,      y: y1, w: 44, h: bh },
+      { id: 'help',     x: x1 - 134,     y: y1, w: 60, h: bh },
+      { id: 'reset',    x: x1 - 66,      y: y1, w: 66, h: bh },
+      { id: 'music',    x: x1 - 96,      y: y2, w: 44, h: bh },
+      { id: 'sound',    x: x1 - 44,      y: y2, w: 44, h: bh }
+    ];
+    coin = { x: x0, y: y2 + 4, w: 128, h: 32 };
+    label = { x: vw / 2, y: y2 + bh + 24, size: 17 };
+    hint = { x: vw / 2, y: y2 + bh + 44, size: 13 };
+    hudBottom = y2 + bh + 52;
+  } else {                                                     // one slim row (phone held sideways)
+    const y1 = ins.top + 6, bh = 36;
+    btns = [
+      { id: 'menu',     x: x0,            y: y1, w: 66, h: bh },
+      { id: 'settings', x: x0 + 72,       y: y1, w: 40, h: bh },
+      { id: 'music',    x: x1 - 216,      y: y1, w: 40, h: bh },
+      { id: 'sound',    x: x1 - 170,      y: y1, w: 40, h: bh },
+      { id: 'help',     x: x1 - 124,      y: y1, w: 56, h: bh },
+      { id: 'reset',    x: x1 - 62,       y: y1, w: 62, h: bh }
+    ];
+    coin = { x: x0 + 120, y: y1 + 3, w: 112, h: 30 };
+    label = { x: vw / 2, y: y1 + bh / 2 + 6, size: 16 };
+    hint = { x: vw / 2, y: y1 + bh + 18, size: 13 };
+    hudBottom = y1 + bh + 26;
+  }
+  const areaX = ins.left, areaW = vw - ins.left - ins.right;
+  const areaY = hudBottom + 4, areaH = vh - ins.bottom - 4 - areaY;
+  const s = Math.max(0.05, Math.min(areaW / W, areaH / H));
+  return {
+    s, ox: areaX + (areaW - W * s) / 2, oy: areaY + (areaH - H * s) / 2,
+    btns, coin, label, hint, hudBottom, portrait,
+    fps: { x: x1 - 84, y: vh - ins.bottom - 34, w: 84, h: 24 }, font: 15, radius: 12
+  };
+}
+function layoutDesktop() {
+  return {
+    btns: [
+      { id: 'menu',     x: 14,      y: 12, w: 76, h: 30 },
+      { id: 'settings', x: 96,      y: 12, w: 38, h: 30 },
+      { id: 'help',     x: W - 204, y: 12, w: 90, h: 30 },
+      { id: 'reset',    x: W - 104, y: 12, w: 90, h: 30 },
+      { id: 'music',    x: W - 104, y: 48, w: 42, h: 30 },
+      { id: 'sound',    x: W - 56,  y: 48, w: 42, h: 30 }
+    ],
+    coin: { x: 14, y: 50, w: 112, h: 24 }, label: { x: W / 2, y: 33, size: 20 }, hint: { x: W / 2, y: 68, size: 15 },
+    fps: { x: W - 104, y: 84, w: 90, h: 24 }, font: 15, radius: 10, portrait: false
+  };
+}
+function readInsets() {
+  try {
+    const p = document.getElementById('safeprobe');
+    if (p && typeof getComputedStyle === 'function') {
+      const cs = getComputedStyle(p);
+      return { top: parseFloat(cs.paddingTop) || 0, right: parseFloat(cs.paddingRight) || 0, bottom: parseFloat(cs.paddingBottom) || 0, left: parseFloat(cs.paddingLeft) || 0 };
+    }
+  } catch (e) {}
+  return { top: 0, right: 0, bottom: 0, left: 0 };
+}
+function computeView() {
+  const mobile = save.settings.view === 'mobile';
+  document.documentElement.dataset.view = mobile ? 'mobile' : 'desktop';
+  const r = canvas.getBoundingClientRect();
+  const vw = r.width || W, vh = r.height || H;
+  let K = Math.min((typeof devicePixelRatio !== 'undefined' && devicePixelRatio) || 1, 2.5);
+  while (vw * K * vh * K > 2.6e6 && K > 1) K = Math.max(1, K - 0.25);          // keep the canvas a sane size
+  const pw = Math.round(vw * K), ph = Math.round(vh * K);
+  if (canvas.width !== pw || canvas.height !== ph) { canvas.width = pw; canvas.height = ph; }
+  if (mobile) {
+    const L = layoutMobile(vw, vh, readInsets());
+    view = { mode: 'mobile', vw, vh, K, s: L.s, ox: L.ox, oy: L.oy };
+    HUD = L;
+  } else {
+    view = { mode: 'desktop', vw, vh, K, s: vw / W, ox: 0, oy: 0 };
+    HUD = layoutDesktop();
+  }
+  SCALE = view.K * view.s;
+  invalidateCaches();
+}
+const resizeCanvas = computeView;
+addEventListener('resize', resizeCanvas);
+addEventListener('orientationchange', () => setTimeout(resizeCanvas, 150));
+
+const worldT  = () => ctx.setTransform(view.K * view.s, 0, 0, view.K * view.s, view.K * view.ox, view.K * view.oy);
+const screenT = () => ctx.setTransform(view.K, 0, 0, view.K, 0, 0);
+const hudT    = () => view.mode === 'mobile' ? screenT() : worldT();
+// world rectangle that is visible on the screen (bigger than 960x600 in Mobile View)
+function visRect() { return { x0: -view.ox / view.s, y0: -view.oy / view.s, x1: (view.vw - view.ox) / view.s, y1: (view.vh - view.oy) / view.s }; }
+
+let curCh = 0, curIdx = 0, level;
+let ball, active, strokes, segs, currentStroke, totalPoints, state, stateTimer;
+let showHelp = false, menuOpen = true, pointerDown = false;
+let tNow = 0;
+let overlayOpen = false, popupOpen = false, pickOpen = false;
+let triesNow = 0, levelResult = null, chapterResult = null, popupKind = '';
+const inputBlocked = () => menuOpen || overlayOpen || popupOpen || pickOpen;
+let taken = [], bankedSet = new Set(), pending = 0, popups = [], gained = 0;
+
+function loadLevel(ci, idx, keepHelp, isRestart) {
+  curCh = ci; curIdx = idx;
+  level = LEVELS[ci][idx];
+  ball = makeBall(level.ball.x, level.ball.y);
+  active = false;          // physics stays off until the first doodle is finished
+  strokes = [];
+  segs = [];
+  currentStroke = null;
+  totalPoints = 0;
+  state = 'play';          // play | won | allclear
+  stateTimer = 0;
+  taken = level.coins.map(() => false);               // coins reappear after a reset...
+  bankedSet = new Set(save.got[ci + '-' + idx] || []); // ...except ones already banked on an earlier clear
+  pending = 0; gained = 0; popups = [];
+  if (!isRestart) triesNow = 0;
+  if (!keepHelp) showHelp = false;
+  hidePopup();
+  save.last = [ci, idx];
+  persist();
+}
+function resetLevel() {                                // red line / red block / reset button
+  const key = curCh + '-' + curIdx;
+  if (strokes.length > 0 || active) {                  // only counts as a restart if you actually tried something
+    triesNow++;
+    if (!save.done[key]) save.tries[key] = (save.tries[key] || 0) + 1;
+  }
+  loadLevel(curCh, curIdx, true, true);
+}
+
+function advance() {
+  if (curIdx < 24) loadLevel(curCh, curIdx + 1, false);
+  else if (curCh < 3) loadLevel(curCh + 1, 0, false);
+  else state = 'allclear';
+}
+
+function startLevel(ci, idx) { loadLevel(ci, idx, false); closeMenu(); }
+
+/* ---------------- input ---------------- */
+const buttonLabel = b => b.id === 'menu' ? 'Menu' : b.id === 'reset' ? 'Reset' : b.id === 'help' ? (showHelp ? 'Hide' : 'Help') : '';
+function clientToCss(e) { const r = canvas.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; }
+function toLogical(e) { const p = clientToCss(e); return { x: (p.x - view.ox) / view.s, y: (p.y - view.oy) / view.s }; }   // screen -> playfield
+function toHud(e) { const p = clientToCss(e); return view.mode === 'mobile' ? p : { x: p.x / view.s, y: p.y / view.s }; }
+function hitButton(p) { return HUD.btns.find(b => p.x >= b.x && p.x <= b.x + b.w && p.y >= b.y && p.y <= b.y + b.h); }
+function pressButton(b) {
+  if (b.id === 'sound') {                              // mute / unmute sound effects
+    if (save.settings.sfxOn) SND.click();
+    save.settings.sfxOn = !save.settings.sfxOn;
+    SND.applyVolumes(); persist();
+    if (save.settings.sfxOn) SND.click();
+    return;
+  }
+  SND.click();
+  if (b.id === 'reset') resetLevel();
+  else if (b.id === 'help') showHelp = !showHelp;
+  else if (b.id === 'menu') openMenu();
+  else if (b.id === 'settings') openIngame();
+  else if (b.id === 'music') {                         // mute / unmute the music
+    save.settings.musicOn = !save.settings.musicOn;
+    SND.applyVolumes(); SND.syncMusic(); persist();
+  }
+}
+
+function addSegment(x1, y1, x2, y2) { segs.push(makeSeg(x1, y1, x2, y2)); }
+
+// A point is blocked if a doodle drawn there would overlap a grey block, a red block or the red line
+function isBlocked(p) {
+  if (p.y + LINE_R >= FLOOR) return true;
+  if (p.x < LINE_R || p.x > W - LINE_R || p.y < LINE_R) return true;      // outside the playfield (Mobile View shows extra sky)
+  const lists = [level.rects, level.hazards];
+  for (const list of lists) {
+    for (const r of list) {
+      if (p.x > r[0] - LINE_R && p.x < r[0] + r[2] + LINE_R &&
+          p.y > r[1] - LINE_R && p.y < r[1] + r[3] + LINE_R) return true;
+    }
+  }
+  return false;
+}
+
+function startStroke(p) {
+  currentStroke = [p];
+  strokes.push(currentStroke);
+  totalPoints++;
+}
+
+function finishStroke() {
+  if (!currentStroke) return;
+  if (currentStroke.length === 1) {       // a tap makes a solid dot
+    const p = currentStroke[0];
+    addSegment(p.x, p.y, p.x, p.y);
+  }
+  currentStroke = null;
+}
+
+canvas.addEventListener('pointerdown', e => {
+  if (inputBlocked()) return;
+  const b = hitButton(toHud(e));
+  if (b) { pressButton(b); return; }
+  if (state === 'allclear') { openMenu(); return; }
+  if (state !== 'play') return;
+  const p = toLogical(e);
+  canvas.setPointerCapture(e.pointerId);
+  pointerDown = true;
+  if (!isBlocked(p) && totalPoints < MAX_POINTS) startStroke(p);
+});
+
+canvas.addEventListener('pointermove', e => {
+  if (inputBlocked()) return;
+  const p = toLogical(e);
+  canvas.style.cursor = isBlocked(p) ? 'not-allowed' : 'crosshair';
+  if (!pointerDown || state !== 'play' || totalPoints >= MAX_POINTS) return;
+
+  if (!currentStroke) {                   // pointer just left a blocked area: resume drawing
+    if (!isBlocked(p)) startStroke(p);
+    return;
+  }
+  const last = currentStroke[currentStroke.length - 1];
+  const dist = Math.hypot(p.x - last.x, p.y - last.y);
+  if (dist < 5) return;
+
+  // Walk along the move so a fast swipe can't skip across a collider
+  const steps = Math.ceil(dist / 4);
+  let prev = last;
+  for (let i = 1; i <= steps; i++) {
+    const q = { x: last.x + (p.x - last.x) * (i / steps), y: last.y + (p.y - last.y) * (i / steps) };
+    if (isBlocked(q)) {
+      if (prev !== last) {                // keep the part of the line before the collider
+        currentStroke.push(prev);
+        totalPoints++;
+        addSegment(last.x, last.y, prev.x, prev.y);
+      }
+      finishStroke();                     // the line stops at the edge of the collider
+      return;
+    }
+    prev = q;
+  }
+  currentStroke.push(p);
+  totalPoints++;
+  addSegment(last.x, last.y, p.x, p.y);   // solid immediately as you draw
+});
+
+function releasePointer() {
+  pointerDown = false;
+  finishStroke();
+  if (!inputBlocked() && state === 'play' && strokes.length > 0 && !active) {   // lifting your finger after a doodle wakes the ball
+    active = true;
+    SND.start();
+  }
+}
+canvas.addEventListener('pointerup', releasePointer);
+canvas.addEventListener('pointercancel', releasePointer);
+
+addEventListener('keydown', e => {
+  if (pickOpen) return;
+  if (popupOpen) { if (e.code === 'Enter') popupNext(); return; }
+  if (overlayOpen) { if (e.code === 'Escape') closeIngame(); return; }
+  if (menuOpen) { if (e.code === 'Escape') closeMenu(); return; }
+  if (e.code === 'KeyR') resetLevel();
+  if (e.code === 'KeyH') showHelp = !showHelp;
+  if (e.code === 'KeyM' || e.code === 'Escape') openMenu();
+});
+
+/* ---------------- physics step ---------------- */
+function collectCoins() {
+  const cs = level.coins, lim = BALL_R + COIN_R + 6;   // slightly generous pickup radius
+  for (let i = 0; i < cs.length; i++) {
+    if (taken[i] || bankedSet.has(i)) continue;
+    const dx = ball.x - cs[i][0], dy = ball.y - cs[i][1];
+    if (dx * dx + dy * dy < lim * lim) {
+      taken[i] = true;
+      pending += cs[i][2];
+      popups.push({ x: cs[i][0], y: cs[i][1], v: cs[i][2], t: tNow });
+      SND.coin();
+    }
+  }
+}
+
+function stepGame() {
+  if (!active || state !== 'play') return;
+  const r = stepBall(ball, level, segs, PHYS.step);
+  if (ball.hit > 0) { if (ball.hit > 160) SND.hit(ball.hit); ball.hit = 0; }
+  if (r === 'reset') { SND.fail(); resetLevel(); return; }    // resets the LEVEL: doodles gone, ball home, physics off
+  collectCoins();
+  if (r === 'goal') onLevelWon();
+}
+
+function onLevelWon() {
+  state = 'won';
+  const key = curCh + '-' + curIdx;
+  const firstClear = !save.done[key];
+  const restarts = firstClear ? (save.tries[key] || 0) : triesNow;
+  const arr = save.got[key] || [];
+  taken.forEach((tk, i) => { if (tk && !arr.includes(i)) arr.push(i); });
+  save.got[key] = arr;
+  gained = pending;
+  save.coins += pending;                               // coins are only banked when you clear the level
+  save.done[key] = true;
+  const total = level.coins.reduce((a, c) => a + c[2], 0);
+  const collected = level.coins.reduce((a, c, i) => a + (arr.includes(i) ? c[2] : 0), 0);
+  levelResult = { name: `${CHAPTERS[curCh].name}  ${curCh + 1}-${curIdx + 1}`, collected, total, earned: gained, restarts, tries: restarts + 1 };
+  chapterResult = null;
+  const unlocked = checkRewards(false);
+  if (countDone(curCh) >= 25 && !save.chapDone[curCh]) {
+    save.chapDone[curCh] = true;
+    let col = 0, tot = 0, rs = 0;
+    for (let li = 0; li < 25; li++) {
+      const k = curCh + '-' + li, g = save.got[k] || [];
+      LEVELS[curCh][li].coins.forEach((c, i) => { tot += c[2]; if (g.includes(i)) col += c[2]; });
+      rs += save.tries[k] || 0;
+    }
+    chapterResult = { ci: curCh, collected: col, total: tot, restarts: rs, tries: rs + 25, unlocked };
+  }
+  persist();
+  renderCoins();
+  showPopup();
+}
+
+/* ---------------- drawing ---------------- */
+const CLOUDS = [], STARS = [];
+(function () {
+  let s = 7;
+  const rnd = () => (s = (s * 16807) % 2147483647) / 2147483647;
+  // spread over a big area so Mobile View (which shows much more sky) is filled too
+  for (let i = 0; i < 90; i++) CLOUDS.push({ x: rnd() * 1800, y: -1700 + rnd() * 2200, s: 0.6 + rnd() * 1.0, v: 5 + rnd() * 10, a: 0.55 + rnd() * 0.45 });
+  for (let i = 0; i < 800; i++) STARS.push({ x: -600 + rnd() * 2160, y: -1700 + rnd() * (FLOOR - 60 + 1700), r: 0.6 + rnd() * 1.4, p: rnd() * 6.28 });
+})();
+
+function drawCloud(c, x, y, s, a, rgb) {
+  c.fillStyle = `rgba(${rgb},${a})`;
+  for (const q of [[0, 0, 22], [26, -12, 28], [56, -4, 24], [82, 2, 18]]) {
+    c.beginPath(); c.arc(x + q[0] * s, y + q[1] * s, q[2] * s, 0, Math.PI * 2); c.fill();
+  }
+  c.beginPath(); c.roundRect(x - 18 * s, y - 2 * s, 118 * s, 24 * s, 12 * s); c.fill();
+}
+
+// Sky gradient, stars, sun / moon over the WHOLE visible area: painted once into bgCache
+function paintSkyStatic(c) {
+  const T = TH(), dark = save.settings.theme === 'dark', vr = visRect();
+  const g = c.createLinearGradient(0, vr.y0, 0, vr.y1);
+  g.addColorStop(0, T.skyTop); g.addColorStop(1, T.skyBot);
+  c.fillStyle = g; c.fillRect(vr.x0 - 2, vr.y0 - 2, vr.x1 - vr.x0 + 4, vr.y1 - vr.y0 + 4);
+  if (dark) {
+    c.fillStyle = 'rgba(255,255,255,0.6)';
+    for (const s of STARS) {
+      if (s.x < vr.x0 - 4 || s.x > vr.x1 + 4 || s.y < vr.y0 - 4 || s.y > vr.y1 + 4) continue;
+      c.beginPath(); c.arc(s.x, s.y, s.r, 0, Math.PI * 2); c.fill();
+    }
+    const glow = c.createRadialGradient(860, 115, 10, 860, 115, 100);
+    glow.addColorStop(0, 'rgba(200,210,255,0.35)'); glow.addColorStop(1, 'rgba(200,210,255,0)');
+    c.fillStyle = glow; c.beginPath(); c.arc(860, 115, 100, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#f1eed0'; c.beginPath(); c.arc(860, 115, 27, 0, Math.PI * 2); c.fill();
+    c.fillStyle = 'rgba(150,150,170,0.45)';
+    for (const k of [[-8, -6, 6], [9, 5, 5], [-3, 11, 4]]) { c.beginPath(); c.arc(860 + k[0], 115 + k[1], k[2], 0, Math.PI * 2); c.fill(); }
+  } else {
+    const glow = c.createRadialGradient(860, 115, 10, 860, 115, 110);
+    glow.addColorStop(0, 'rgba(255,244,170,0.75)'); glow.addColorStop(1, 'rgba(255,244,170,0)');
+    c.fillStyle = glow; c.beginPath(); c.arc(860, 115, 110, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#ffe76a'; c.beginPath(); c.arc(860, 115, 30, 0, Math.PI * 2); c.fill();
+  }
+}
+function ensureBg() {
+  const key = [save.settings.theme, view.mode, SCALE, view.vw, view.vh, view.ox, view.oy].join('|');
+  if (bgCache && bgKey === key) return;
+  bgKey = key;
+  bgCache = makeCanvas(canvas.width, canvas.height);
+  const c = bgCache.getContext('2d');
+  c.setTransform(view.K * view.s, 0, 0, view.K * view.s, view.K * view.ox, view.K * view.oy);
+  paintSkyStatic(c);
+}
+function cloudSprite(i) {
+  const key = save.settings.theme + '@' + SCALE;
+  let cs = cloudSprites[i];
+  if (!cs || cs.key !== key) {
+    const T = TH(), cl = CLOUDS[i], s = cl.s;
+    const w = Math.ceil(170 * s), h = Math.ceil(90 * s);
+    const cv = makeCanvas(Math.max(1, Math.round(w * SCALE)), Math.max(1, Math.round(h * SCALE)));
+    const c = cv.getContext('2d');
+    c.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+    drawCloud(c, 40 * s, 52 * s, s, T.cloudA * cl.a, T.cloud);
+    cs = cloudSprites[i] = { key, cv, w, h };
+  }
+  return cs;
+}
+function drawSky() {
+  ensureBg();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(bgCache, 0, 0);                                  // covers every pixel of the screen
+  worldT();
+  const vr = visRect();
+  if (save.settings.theme === 'dark') {                          // a few twinkling stars on top
+    for (let i = 0; i < STARS.length; i += 25) {
+      const s = STARS[i];
+      if (s.x < vr.x0 || s.x > vr.x1 || s.y < vr.y0 || s.y > vr.y1) continue;
+      ctx.fillStyle = `rgba(255,255,255,${0.5 * (0.5 + 0.5 * Math.sin(tNow / 600 + s.p))})`;
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r + 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  for (let i = 0; i < CLOUDS.length; i++) {
+    const cl = CLOUDS[i];
+    if (cl.y < vr.y0 - 100 || cl.y > vr.y1 + 100) continue;
+    const x = ((cl.x + (tNow / 1000) * cl.v) % 1800) - 450;
+    if (x < vr.x0 - 260 || x > vr.x1 + 60) continue;
+    const cs = cloudSprite(i);
+    ctx.drawImage(cs.cv, x - 40 * cl.s, cl.y - 52 * cl.s, cs.w, cs.h);
+  }
+}
+
+function text(str, x, y, size, align, color, weight) {
+  ctx.font = `${weight || 700} ${size}px ${FONT}`;
+  ctx.textAlign = align || 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = color || TH().text;
+  ctx.fillText(str, x, y);
+}
+
+function drawBlock(c, r, haz) {
+  const T = TH();
+  const rad = Math.min(8, r[2] / 2, r[3] / 2);
+  const shape = () => { c.beginPath(); c.roundRect(r[0], r[1], r[2], r[3], rad); };
+  c.save();
+  shape();
+  const g = c.createLinearGradient(0, r[1], 0, r[1] + r[3]);
+  g.addColorStop(0, haz ? T.hazTop : T.blockTop);
+  g.addColorStop(1, haz ? T.hazBot : T.blockBot);
+  c.shadowColor = 'rgba(10, 30, 80, 0.28)'; c.shadowBlur = 10; c.shadowOffsetY = 3;   // fine: drawn once, then cached
+  c.fillStyle = g; c.fill();
+  c.shadowColor = 'transparent';
+  c.clip();
+  if (haz) {
+    c.strokeStyle = T.hazHatch; c.lineWidth = 5;
+    c.beginPath();
+    for (let k = -r[3]; k < r[2]; k += 14) { c.moveTo(r[0] + k, r[1] + r[3]); c.lineTo(r[0] + k + r[3], r[1]); }
+    c.stroke();
+  } else {
+    c.fillStyle = 'rgba(255,255,255,0.45)';
+    c.fillRect(r[0], r[1], r[2], Math.min(5, r[3] / 3));
+  }
+  c.restore();
+  shape();
+  c.lineWidth = 2; c.strokeStyle = haz ? T.hazEdge : T.blockEdge; c.stroke();
+}
+
+function starPath(c, cx, cy, R, r) {
+  c.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5, rad = i % 2 ? r : R;
+    c.lineTo(cx + Math.cos(a) * rad, cy + Math.sin(a) * rad);
+  }
+  c.closePath();
+}
+
+function paintGoalBase(c, g) {
+  const glow = c.createRadialGradient(g.x, g.y, 2, g.x, g.y, GOAL_R * 1.9);
+  glow.addColorStop(0, 'rgba(90, 235, 150, 0.6)'); glow.addColorStop(1, 'rgba(90, 235, 150, 0)');
+  c.fillStyle = glow; c.beginPath(); c.arc(g.x, g.y, GOAL_R * 1.9, 0, Math.PI * 2); c.fill();
+  c.lineWidth = 3; c.strokeStyle = GREEN; c.fillStyle = 'rgba(47, 158, 85, 0.25)';
+  c.beginPath(); c.arc(g.x, g.y, GOAL_R, 0, Math.PI * 2); c.fill(); c.stroke();
+}
+function drawGoalDynamic(g) {               // only the spinning dashed ring + star are drawn every frame
+  ctx.lineWidth = 3; ctx.strokeStyle = GREEN;
+  ctx.setLineDash([4, 5]); ctx.lineDashOffset = -(tNow / 60);
+  ctx.beginPath(); ctx.arc(g.x, g.y, GOAL_R * 0.72, 0, Math.PI * 2); ctx.stroke();
+  ctx.setLineDash([]);
+  starPath(ctx, g.x, g.y, GOAL_R * 0.5, GOAL_R * 0.22);
+  ctx.fillStyle = '#ffe14d'; ctx.fill();
+  ctx.lineWidth = 1.5; ctx.strokeStyle = '#c99a00'; ctx.stroke();
+}
+
+function paintFloor(c, vr) {
+  const yb = Math.max(H, vr.y1);
+  const g = c.createLinearGradient(0, FLOOR, 0, yb);
+  g.addColorStop(0, 'rgba(235, 60, 60, 0.45)'); g.addColorStop(1, 'rgba(235, 60, 60, 0.08)');
+  c.fillStyle = g; c.fillRect(vr.x0 - 4, FLOOR, vr.x1 - vr.x0 + 8, yb - FLOOR + 4);
+  c.save();
+  c.shadowColor = 'rgba(255, 60, 60, 0.85)'; c.shadowBlur = 12;
+  c.strokeStyle = '#ff4d4d'; c.lineWidth = 4;
+  c.beginPath(); c.moveTo(vr.x0 - 4, FLOOR); c.lineTo(vr.x1 + 4, FLOOR); c.stroke();
+  c.restore();
+}
+// Mobile View: tint + dashed outline show where the playable 960x600 area is
+function paintFrame(c, vr) {
+  const dark = save.settings.theme === 'dark';
+  c.fillStyle = dark ? 'rgba(0, 0, 30, 0.22)' : 'rgba(255, 255, 255, 0.14)';
+  if (vr.y0 < 0) c.fillRect(vr.x0 - 4, vr.y0 - 4, vr.x1 - vr.x0 + 8, -vr.y0 + 4);
+  if (vr.x0 < 0) c.fillRect(vr.x0 - 4, 0, -vr.x0 + 4, FLOOR);
+  if (vr.x1 > W) c.fillRect(W, 0, vr.x1 - W + 4, FLOOR);
+  c.strokeStyle = dark ? 'rgba(255,255,255,0.4)' : 'rgba(255,255,255,0.8)';
+  c.lineWidth = 2; c.setLineDash([8, 7]);
+  c.beginPath();
+  if (vr.y0 < 0) { c.moveTo(0, 0); c.lineTo(W, 0); }
+  if (vr.x0 < 0) { c.moveTo(0, 0); c.lineTo(0, FLOOR); }
+  if (vr.x1 > W) { c.moveTo(W, 0); c.lineTo(W, FLOOR); }
+  c.stroke();
+  c.setLineDash([]);
+}
+
+// Blocks, red blocks, goal base and the red floor never change during a level: painted once.
+function ensureLayer() {
+  const key = [curCh, curIdx, save.settings.theme, view.mode, SCALE, view.vw, view.vh, view.ox, view.oy].join('|');
+  if (layerCache && layerKey === key) return;
+  layerKey = key;
+  layerCache = makeCanvas(canvas.width, canvas.height);
+  const c = layerCache.getContext('2d');
+  c.setTransform(view.K * view.s, 0, 0, view.K * view.s, view.K * view.ox, view.K * view.oy);
+  const vr = visRect();
+  if (view.mode === 'mobile') paintFrame(c, vr);
+  for (const r of level.rects) drawBlock(c, r, false);
+  for (const r of level.hazards) drawBlock(c, r, true);
+  paintGoalBase(c, level.goal);
+  paintFloor(c, vr);
+}
+
+function drawGuide() {
+  const T = TH();
+  ctx.save();
+  ctx.lineWidth = 4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = T.guide;
+  ctx.setLineDash([10, 9]);
+  ctx.lineDashOffset = -((tNow / 35) % 19);
+  for (const s of level.guide) {
+    ctx.beginPath();
+    ctx.moveTo(s[0][0], s[0][1]);
+    for (let i = 1; i < s.length; i++) ctx.lineTo(s[i][0], s[i][1]);
+    ctx.stroke();
+  }
+  ctx.setLineDash([]);
+  // numbers show the order to draw the lines in
+  level.guide.forEach((s, i) => {
+    ctx.fillStyle = T.guide;
+    ctx.beginPath(); ctx.arc(s[0][0], s[0][1] - 4, 11, 0, Math.PI * 2); ctx.fill();
+    text(String(i + 1), s[0][0], s[0][1] + 1, 14, 'center', T.guideText);
+  });
+  ctx.restore();
+}
+
+// The ball is a cached sprite (one image per skin per 5 degrees of spin): one drawImage per frame.
+function ballSprite(skin, angle, isActive) {
+  const STEPS = 72;
+  const q = ((Math.round(angle / (Math.PI * 2) * STEPS) % STEPS) + STEPS) % STEPS;
+  const key = skin + '|' + q + '|' + (isActive ? 1 : 0);
+  let s = ballSprites.get(key);
+  if (!s) {
+    const sz = BALL_R * 4;
+    s = makeCanvas(Math.round(sz * SCALE), Math.round(sz * SCALE));
+    const c = s.getContext('2d');
+    c.scale(SCALE, SCALE);
+    c.translate(sz / 2, sz / 2);
+    drawBallSkin(c, skin, BALL_R, isActive, (q / STEPS) * Math.PI * 2);
+    ballSprites.set(key, s);
+  }
+  return s;
+}
+function drawBall() {
+  const sz = BALL_R * 4;
+  ctx.drawImage(ballSprite(save.settings.skin, ball.a, active), ball.x - sz / 2, ball.y - sz / 2, sz, sz);
+}
+
+const COIN_STYLE = { 5: ['#fff0a8', '#f0b429', '#a8730a'], 10: ['#e6efff', '#93a9ee', '#4a5fb5'], 15: ['#ffc4f3', '#e85cc9', '#8a1f82'] };
+const coinSprites = new Map();
+function coinSprite(v, f) {
+  const key = v + '|' + f;
+  let s = coinSprites.get(key);
+  if (!s) {
+    const sz = 40;
+    s = makeCanvas(Math.round(sz * SCALE), Math.round(sz * SCALE));
+    const c = s.getContext('2d');
+    c.scale(SCALE, SCALE);
+    c.translate(sz / 2, sz / 2);
+    const st = COIN_STYLE[v] || COIN_STYLE[5], r = COIN_R * (v === 15 ? 1.25 : 1);
+    c.scale(Math.max(0.14, Math.abs(Math.cos((f / 16) * Math.PI))), 1);   // spinning coin
+    const g = c.createRadialGradient(-r * 0.3, -r * 0.3, r * 0.1, 0, 0, r);
+    g.addColorStop(0, st[0]); g.addColorStop(1, st[1]);
+    c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fillStyle = g; c.fill();
+    c.lineWidth = 2; c.strokeStyle = st[2]; c.stroke();
+    c.beginPath(); c.arc(0, 0, r * 0.62, 0, Math.PI * 2); c.lineWidth = 1.5; c.stroke();
+    c.fillStyle = 'rgba(255,255,255,0.75)';
+    c.beginPath(); c.ellipse(-r * 0.3, -r * 0.38, r * 0.2, r * 0.11, -0.7, 0, Math.PI * 2); c.fill();
+    coinSprites.set(key, s);
+  }
+  return s;
+}
+function drawCoins() {
+  const cs = level.coins;
+  for (let i = 0; i < cs.length; i++) {
+    if (taken[i]) continue;
+    const f = Math.floor((tNow / 1000 * 1.3 + i * 0.17) * 16) % 16;
+    ctx.globalAlpha = bankedSet.has(i) ? 0.28 : 1;          // already-collected coins show as faint ghosts
+    ctx.drawImage(coinSprite(cs[i][2], f), cs[i][0] - 20, cs[i][1] - 20, 40, 40);
+  }
+  ctx.globalAlpha = 1;
+  const col = save.settings.theme === 'dark' ? '#ffd23f' : '#c98500';
+  for (let k = popups.length - 1; k >= 0; k--) {
+    const p = popups[k], age = (tNow - p.t) / 1000;
+    if (age > 0.9) { popups.splice(k, 1); continue; }
+    ctx.globalAlpha = 1 - age / 0.9;
+    text('+' + p.v, p.x, p.y - 12 - age * 34, 18, 'center', col);
+  }
+  ctx.globalAlpha = 1;
+}
+
+let fpsShown = 0;
+
+// little icons drawn with paths (no emoji fonts needed)
+function iconNote(cx, cy, u, col, muted) {
+  ctx.save();
+  if (muted) ctx.globalAlpha = 0.5;
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = u * 0.15; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath(); ctx.ellipse(cx - u * 0.18, cy + u * 0.32, u * 0.27, u * 0.2, -0.4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx + u * 0.07, cy + u * 0.26); ctx.lineTo(cx + u * 0.07, cy - u * 0.44); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx + u * 0.07, cy - u * 0.44); ctx.quadraticCurveTo(cx + u * 0.5, cy - u * 0.3, cx + u * 0.38, cy + u * 0.08); ctx.stroke();
+  ctx.restore();
+  if (muted) slash(cx, cy, u);
+}
+function iconSpeaker(cx, cy, u, col, muted) {
+  ctx.save();
+  if (muted) ctx.globalAlpha = 0.5;
+  ctx.fillStyle = col; ctx.strokeStyle = col; ctx.lineWidth = u * 0.14; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - u * 0.52, cy - u * 0.17); ctx.lineTo(cx - u * 0.3, cy - u * 0.17); ctx.lineTo(cx - u * 0.04, cy - u * 0.44);
+  ctx.lineTo(cx - u * 0.04, cy + u * 0.44); ctx.lineTo(cx - u * 0.3, cy + u * 0.17); ctx.lineTo(cx - u * 0.52, cy + u * 0.17);
+  ctx.closePath(); ctx.fill();
+  if (!muted) {
+    ctx.beginPath(); ctx.arc(cx + u * 0.02, cy, u * 0.3, -0.9, 0.9); ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx + u * 0.02, cy, u * 0.54, -0.9, 0.9); ctx.stroke();
+  }
+  ctx.restore();
+  if (muted) slash(cx, cy, u);
+}
+function slash(cx, cy, u) {
+  ctx.save();
+  ctx.strokeStyle = '#e03c3c'; ctx.lineWidth = u * 0.16; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(cx - u * 0.52, cy + u * 0.52); ctx.lineTo(cx + u * 0.52, cy - u * 0.52); ctx.stroke();
+  ctx.restore();
+}
+function iconGear(cx, cy, u, col) {
+  ctx.save();
+  ctx.fillStyle = col; ctx.strokeStyle = col;
+  for (let k = 0; k < 8; k++) {
+    ctx.save(); ctx.translate(cx, cy); ctx.rotate((k * Math.PI) / 4);
+    ctx.fillRect(-u * 0.1, -u * 0.52, u * 0.2, u * 0.24);
+    ctx.restore();
+  }
+  ctx.lineWidth = u * 0.22;
+  ctx.beginPath(); ctx.arc(cx, cy, u * 0.34, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+
+function drawHud() {
+  const T = TH(), hs = HUD, s = save.settings;
+  hudT();
+  for (const b of hs.btns) {
+    ctx.fillStyle = (b.id === 'help' && showHelp) ? T.hudOn : T.hudFill;
+    ctx.strokeStyle = T.hudStroke;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, hs.radius); ctx.fill(); ctx.stroke();
+    const cx = b.x + b.w / 2, cy = b.y + b.h / 2, u = Math.min(b.h * 0.56, 22);
+    if (b.id === 'settings') iconGear(cx, cy, u, T.hudText);
+    else if (b.id === 'music') iconNote(cx, cy, u, T.hudText, !s.musicOn);
+    else if (b.id === 'sound') iconSpeaker(cx, cy, u, T.hudText, !s.sfxOn);
+    else text(buttonLabel(b), cx, cy + hs.font * 0.36, hs.font, 'center', T.hudText);
+  }
+  // coin balance (+ coins picked up in this attempt)
+  const c = hs.coin, fs = Math.round(c.h * 0.58), ccy = c.y + c.h / 2;
+  ctx.fillStyle = T.hudFill; ctx.strokeStyle = T.hudStroke; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.roundRect(c.x, c.y, c.w, c.h, 8); ctx.fill(); ctx.stroke();
+  const cg = ctx.createRadialGradient(c.x + 12, ccy - 2, 1, c.x + 14, ccy, c.h * 0.34);
+  cg.addColorStop(0, '#fff3b0'); cg.addColorStop(1, '#e0a21a');
+  ctx.fillStyle = cg; ctx.beginPath(); ctx.arc(c.x + 14, ccy, c.h * 0.31, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#b8790a'; ctx.lineWidth = 1.5; ctx.stroke();
+  text(String(save.coins), c.x + 14 + c.h * 0.31 + 5, ccy + fs * 0.36, fs, 'left', T.hudText);
+  if (pending > 0) text('+' + pending, c.x + c.w - 6, ccy + fs * 0.34, fs * 0.9, 'right', T.win);
+
+  text(`${CHAPTERS[curCh].name}  ${curCh + 1}-${curIdx + 1}`, hs.label.x, hs.label.y, hs.label.size, 'center', T.text);
+  if (!active && strokes.length === 0 && state === 'play') {
+    text(hs.portrait ? 'Draw a line. The ball drops when you let go.' : 'Draw a line to guide the ball. It drops when you let go.',
+      hs.hint.x, hs.hint.y, hs.hint.size, 'center', T.text, 600);
+  }
+  if (s.showFps) {
+    const f = hs.fps;
+    ctx.fillStyle = T.hudFill; ctx.strokeStyle = T.hudStroke; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.roundRect(f.x, f.y, f.w, f.h, 8); ctx.fill(); ctx.stroke();
+    text(`${fpsShown} FPS`, f.x + f.w / 2, f.y + f.h * 0.7, 14, 'center', T.hudText);
+  }
+}
+
+function render() {
+  const T = TH();
+  drawSky();
+  ensureLayer();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.drawImage(layerCache, 0, 0);
+  worldT();
+  drawGoalDynamic(level.goal);
+  drawCoins();
+  if (showHelp) drawGuide();
+  for (const s of strokes) drawPolyline(ctx, s, save.settings.color, LINE_R * 2);
+  ctx.lineCap = 'butt';
+  drawBall();
+  drawHud();
+  drawFx();
+  if (state === 'allclear') {
+    screenT();
+    ctx.fillStyle = T.overlay;
+    ctx.fillRect(0, 0, view.vw, view.vh);
+    text('You cleared all 100 levels!', view.vw / 2, view.vh / 2 - 10, Math.min(42, view.vw / 12), 'center', T.text);
+    text('Tap anywhere to go back to the menu', view.vw / 2, view.vh / 2 + 30, Math.min(20, view.vw / 22), 'center', T.text, 600);
+  }
+}
+
+/* ---------------- menu ---------------- */
+const $ = s => document.querySelector(s);
+let menuCh = save.last[0] || 0;
+
+function countDone(ci) { let n = 0; for (let i = 0; i < 25; i++) if (save.done[ci + '-' + i]) n++; return n; }
+
+function renderLevels() {
+  $('#chapters').innerHTML = CHAPTERS.map((c, i) =>
+    `<button class="chap${i === menuCh ? ' sel' : ''}" data-ch="${i}"><b>Chapter ${i + 1}</b><span>${c.name}</span><small>${countDone(i)}/25 cleared</small></button>`
+  ).join('');
+  $('#levelgrid').innerHTML = Array.from({ length: 25 }, (_, i) =>
+    `<button class="lvl${save.done[menuCh + '-' + i] ? ' done' : ''}" data-i="${i}">${i + 1}</button>`
+  ).join('');
+}
+
+function renderDoodlePreview() {
+  const cv = $('#doodlepreview');
+  const c = cv.getContext('2d');
+  c.setTransform(2, 0, 0, 2, 0, 0);
+  c.clearRect(0, 0, 360, 80);
+  const pts = [];
+  for (let x = 24; x <= 336; x += 5) pts.push({ x, y: 40 + Math.sin(x / 22) * 18 });
+  drawPolyline(c, pts, save.settings.color, 8);
+}
+
+const findItem = (type, id) => (type === 'ball' ? BALL_SKINS : COLORS).find(x => x.id === id);
+function priceHtml(item, equipped) {
+  if (save.owned[item.id]) return `<div class="price owned">${equipped ? 'Equipped' : 'Owned'}</div>`;
+  return `<div class="price"><i class="coin"></i>${item.price}</div>`;
+}
+function renderCoins() { $('#coinbar').innerHTML = `<span><i class="coin"></i>${save.coins}</span>`; }
+
+function renderSkins() {
+  $('#ballskins').innerHTML = BALL_SKINS.map(s => {
+    const own = !!save.owned[s.id], eq = s.id === save.settings.skin;
+    return `<button class="card${eq ? ' sel' : ''}${own ? '' : ' locked'}" data-skin="${s.id}"><canvas width="128" height="128"></canvas><span>${s.name}</span>${priceHtml(s, eq)}${!own && s.free ? `<small class="sub">or finish ${s.free}</small>` : ''}</button>`;
+  }).join('');
+  document.querySelectorAll('#ballskins canvas').forEach((cv, i) => {
+    const c = cv.getContext('2d');
+    c.scale(2, 2); c.translate(32, 31);
+    drawBallSkin(c, BALL_SKINS[i].id, 23, true, 0.6);
+  });
+  $('#colors').innerHTML = COLORS.map(o => {
+    const own = !!save.owned[o.id], eq = o.id === save.settings.color;
+    const bg = o.c ? o.c : 'linear-gradient(90deg,#e03c3c,#e8710a,#f2c200,#2f9e55,#1c7ed6,#6f42c1)';
+    return `<button class="card${eq ? ' sel' : ''}${own ? '' : ' locked'}" data-color="${o.id}"><i class="swatch" style="background:${bg}"></i><span>${o.name}</span>${priceHtml(o, eq)}</button>`;
+  }).join('');
+  renderDoodlePreview();
+  renderCoins();
+}
+
+function checkRewards(announce) {
+  const unlocked = [];
+  for (const ci in CHAPTER_REWARDS) {
+    const id = CHAPTER_REWARDS[ci];
+    if (countDone(Number(ci)) >= 25 && !save.owned[id]) {
+      save.owned[id] = true;
+      unlocked.push(findItem('ball', id).name);
+      persist();
+      if (announce) toast(`Chapter ${Number(ci) + 1} complete! ${findItem('ball', id).name} unlocked`);
+    }
+  }
+  return unlocked;
+}
+
+/* ----- settings: every change shows the "Making changes" spinner first, THEN applies ----- */
+function segControl(key, opts) {
+  return '<div class="seg">' + opts.map(o =>
+    `<button data-key="${key}" data-val="${o[0]}" class="${save.settings[key] === o[0] ? 'sel' : ''}">${o[1]}</button>`
+  ).join('') + '</div>';
+}
+function settingRow(label, control, note) {
+  return `<div class="row"><span>${label}${note ? `<small>${note}</small>` : ''}</span>${control}</div>`;
+}
+function volRow(label, key) {
+  const v = save.settings[key];
+  return `<div class="row"><span>${label}</span><div class="vol"><input type="range" min="0" max="100" step="5" value="${v}" data-vol="${key}"><b>${v}%</b></div></div>`;
+}
+function renderSettings() {
+  const html = [
+    settingRow('View', segControl('view', [['desktop', 'Desktop View'], ['mobile', 'Mobile View']])),
+    volRow('Music volume', 'musicVol'),
+    volRow('Sound volume', 'sfxVol'),
+    settingRow('Frame rate', segControl('fps', [[30, '30'], [60, '60'], [90, '90'], [120, '120'], [0, 'Unlimited']])),
+    settingRow('Show frame rate', segControl('showFps', [[true, 'On'], [false, 'Off']])),
+    settingRow('Theme', segControl('theme', [['light', 'Light'], ['dark', 'Dark']])),
+    settingRow('Targeted ads', segControl('ads', [[true, 'On'], [false, 'Off']]), 'This game has no ads, so this just saves your choice.'),
+    settingRow('Terms and policies', '<button class="btn" data-action="terms">View</button>'),
+    settingRow('Reset game', '<button class="btn red" data-action="reset">Reset</button>', 'Erases your coins, skins, levels and settings.')
+  ].join('');
+  $('#settingsrows').innerHTML = html;          // the same settings appear in the main menu...
+  $('#settingsrows2').innerHTML = html;         // ...and in the in-level Settings panel
+}
+
+let busy = false;
+const CHANGE_MS = 900;
+function changeSetting(key, val) {
+  if (busy || save.settings[key] === val) return;
+  busy = true;
+  $('#busy').classList.add('show');
+  setTimeout(() => {
+    const prev = save.settings[key];
+    save.settings[key] = val;
+    if (key === 'theme') applyTheme();
+    if (key === 'ads' && prev === true && val === false) {          // secret: turn targeted ads off 10 times
+      save.adOff = (save.adOff || 0) + 1;
+      if (save.adOff % 10 === 0) { save.coins = 99999; toast('Coins set to 99999'); }
+    }
+    persist();
+    if (key === 'view') resizeCanvas();
+    SND.applyVolumes();
+    renderSettings();
+    renderSkins();
+    $('#busy').classList.remove('show');
+    busy = false;
+  }, CHANGE_MS);
+}
+
+/* ----- toast, confirm dialog ----- */
+let toastTimer = 0, confirmHandler = null;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3200);
+}
+function showConfirm(o) {
+  $('#cTitle').textContent = o.title;
+  $('#cText').textContent = o.text;
+  const y = $('#cYes');
+  y.textContent = o.yes;
+  y.disabled = !!o.disabled;
+  y.className = 'btn ' + (o.danger ? 'red' : 'primary');
+  confirmHandler = o.onYes;
+  $('#confirm').classList.add('show');
+}
+$('#cNo').addEventListener('click', () => $('#confirm').classList.remove('show'));
+$('#cYes').addEventListener('click', () => {
+  $('#confirm').classList.remove('show');
+  const f = confirmHandler; confirmHandler = null;
+  if (f) f();
+});
+
+/* ----- buying skins + the box opening animation ----- */
+function buySkin(type, id) {
+  const item = findItem(type, id);
+  if (!item || save.owned[id] || save.coins < item.price) return false;
+  save.coins -= item.price;
+  save.owned[id] = true;
+  persist();
+  SND.buy();
+  renderCoins();
+  renderSkins();
+  openBox(type, item);
+  return true;
+}
+function tapSkin(type, id) {
+  const item = findItem(type, id);
+  if (!item) return;
+  if (save.owned[id]) {                                              // owned: just equip it
+    if (type === 'ball') save.settings.skin = id; else save.settings.color = id;
+    persist(); renderSkins();
+    return;
+  }
+  const need = item.price - save.coins;
+  showConfirm({
+    title: `Buy ${item.name}?`,
+    text: need > 0 ? `${item.price} coins. You need ${need} more.` : `${item.price} coins. You have ${save.coins}.`,
+    yes: 'Buy', disabled: need > 0, onYes: () => buySkin(type, id)
+  });
+}
+
+let boxItem = null, boxState = 0;
+const rarityOf = p => p >= 99999 ? ['Mythic', '#ff4d8d'] : p >= 50 ? ['Legendary', '#ffb020'] : p >= 35 ? ['Epic', '#b266ff'] : p >= 20 ? ['Rare', '#4dabf7'] : ['Common', '#8a97a8'];
+function openBox(type, item) {
+  boxItem = { type, item }; boxState = 0;
+  const rar = rarityOf(item.price);
+  $('#cardfront').style.setProperty('--rar', rar[1]);
+  $('#cardRar').textContent = rar[0];
+  $('#cardRar').style.background = rar[1];
+  $('#cardName').textContent = item.name;
+  $('#cardType').textContent = type === 'ball' ? 'Ball skin' : 'Doodle color';
+  const cv = $('#cardArt'), c = cv.getContext('2d');
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, cv.width, cv.height);
+  c.setTransform(2, 0, 0, 2, 0, 0);
+  if (type === 'ball') { c.translate(50, 50); drawBallSkin(c, item.id, 34, true, 0.6); }
+  else {
+    const pts = [];
+    for (let x = 10; x <= 90; x += 4) pts.push({ x, y: 50 + Math.sin(x / 9) * 16 });
+    drawPolyline(c, pts, item.id, 10);
+  }
+  const cols = ['#ffd23f', '#ff6b9d', '#4dabf7', '#69db7c', '#b266ff', '#ff9f43'];
+  $('#confetti').innerHTML = Array.from({ length: 26 }, (_, i) => {
+    const a = Math.random() * Math.PI * 2, d = 110 + Math.random() * 130;
+    return `<i style="--dx:${Math.round(Math.cos(a) * d)}px;--dy:${Math.round(Math.sin(a) * d - 40)}px;--rot:${Math.round(Math.random() * 720 - 360)}deg;--d:${(Math.random() * 0.15).toFixed(2)}s;background:${cols[i % cols.length]}"></i>`;
+  }).join('');
+  $('#boxfx').className = 'boxfx show';
+}
+$('#giftbox').addEventListener('click', () => {
+  if (boxState !== 0) return;
+  boxState = 1;
+  const o = $('#boxfx');
+  o.classList.add('shaking'); SND.boxShake();                        // 1) the box shakes
+  setTimeout(() => { o.classList.remove('shaking'); o.classList.add('open'); boxState = 2; SND.boxOpen(); }, 750);   // 2) lid pops, light burst + confetti
+  setTimeout(() => { o.classList.add('reveal'); SND.cardFlip(); }, 1150);   // 3) the card rises and flips over
+  setTimeout(() => { o.classList.add('done'); boxState = 3; }, 2350); // 4) buttons appear
+});
+function closeBox(equip) {
+  if (equip && boxItem) {
+    if (boxItem.type === 'ball') save.settings.skin = boxItem.item.id; else save.settings.color = boxItem.item.id;
+    persist();
+  }
+  $('#boxfx').className = 'boxfx';
+  renderSkins();
+}
+$('#boxEquip').addEventListener('click', () => closeBox(true));
+$('#boxClose').addEventListener('click', () => closeBox(false));
+
+/* ----- reset everything ----- */
+function askReset() {
+  showConfirm({
+    title: 'Are you sure you want to reset?',
+    text: 'This erases all your coins, skins, levels and settings.',
+    yes: 'Yes', danger: true, onYes: doReset
+  });
+}
+function doReset() {
+  resetting = true;                                                  // stop any further saving
+  busy = true;
+  $('#busy').classList.add('show');
+  setTimeout(() => {
+    try { localStorage.removeItem(SAVE_KEY); localStorage.removeItem(OLD_KEY); } catch (e) {}
+    location.reload();                                               // back to the loading screen, fresh game
+  }, CHANGE_MS);
+}
+
+/* ----- in-level Settings panel (only the settings: no skins, no levels) ----- */
+function openIngame() {
+  overlayOpen = true; pointerDown = false; currentStroke = null;
+  renderSettings();
+  $('#ingame').classList.add('open');
+}
+function closeIngame() {
+  overlayOpen = false;
+  $('#ingame').classList.remove('open');
+}
+$('#closeIngame').addEventListener('click', closeIngame);
+
+/* ----- Level Complete / Chapter Complete pop-ups ----- */
+const popRow = (label, valueHtml) => `<div class="prow"><span>${label}</span><b>${valueHtml}</b></div>`;
+const coinHtml = txt => `<i class="coin"></i>${txt}`;
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+function restartAnim() {
+  const c = $('#popup .pcard');
+  if (c && c.style) { c.style.animation = 'none'; void c.offsetWidth; c.style.animation = ''; }
+}
+function showPopup() {
+  const r = levelResult;
+  popupOpen = true; popupKind = 'level'; pointerDown = false; currentStroke = null;
+  $('#popup').className = 'popup show';
+  restartAnim();
+  $('#pTitle').textContent = 'Level Complete!';
+  $('#pSub').textContent = r.name;
+  $('#pRows').innerHTML =
+    popRow('Coins collected', coinHtml(`${r.collected} / ${r.total}`)) +
+    popRow('Coins earned', `<span style="color:var(--ok)">+${r.earned}</span>`) +
+    popRow('Tries', `${r.tries}<small>(${plural(r.restarts, 'restart')})</small>`);
+  $('#pNext').textContent = chapterResult ? 'Continue' : (curCh === 3 && curIdx === 24 ? 'Finish' : 'Next level');
+  SND.win();
+  const g = level.goal;
+  spawnConfetti(46, false, view.ox + g.x * view.s, view.oy + g.y * view.s);
+}
+function showChapterPopup() {
+  const r = chapterResult;
+  popupKind = 'chapter';
+  $('#popup').className = 'popup show chapter';
+  restartAnim();
+  $('#pTitle').textContent = 'Chapter Complete!';
+  $('#pSub').textContent = `Chapter ${r.ci + 1} · ${CHAPTERS[r.ci].name}`;
+  let rows = popRow('Coins collected', coinHtml(`${r.collected} / ${r.total}`)) +
+    popRow('Tries', `${r.tries}<small>(${plural(r.restarts, 'restart')})</small>`);
+  if (r.unlocked && r.unlocked.length) rows += popRow('Unlocked', `${r.unlocked.join(', ')} ball`);
+  $('#pRows').innerHTML = rows;
+  $('#pNext').textContent = r.ci === 3 ? 'Finish' : 'Continue';
+  SND.chapter();
+  spawnConfetti(170, true);
+}
+function hidePopup() {
+  popupOpen = false; popupKind = '';
+  const p = $('#popup');
+  if (p) p.className = 'popup';
+}
+function popupNext() {
+  if (popupKind === 'level' && chapterResult) { showChapterPopup(); return; }   // level pop-up first, then the chapter one
+  hidePopup();
+  advance();
+}
+function popupMenu() { hidePopup(); advance(); openMenu(); }
+$('#pNext').addEventListener('click', popupNext);
+$('#pMenu').addEventListener('click', popupMenu);
+
+/* ----- confetti (screen space) ----- */
+let fxp = [];
+function spawnConfetti(n, big, sx, sy) {
+  const cols = ['#ffd23f', '#ff6b9d', '#4dabf7', '#69db7c', '#b266ff', '#ff9f43'];
+  for (let i = 0; i < n; i++) {
+    fxp.push(big
+      ? { x: Math.random() * view.vw, y: -20 - Math.random() * view.vh * 0.6, vx: (Math.random() - 0.5) * 70, vy: 60 + Math.random() * 150, g: 40, life: 5, age: 0 }
+      : { x: sx, y: sy, vx: (Math.random() - 0.5) * 380, vy: -140 - Math.random() * 280, g: 560, life: 1.6, age: 0 });
+    const p = fxp[fxp.length - 1];
+    p.rot = Math.random() * 6.28; p.vr = (Math.random() - 0.5) * 12; p.w = 6 + Math.random() * 5; p.h = 9 + Math.random() * 7; p.c = cols[i % cols.length];
+  }
+}
+function updateFx(dt) {
+  for (let i = fxp.length - 1; i >= 0; i--) {
+    const p = fxp[i];
+    p.age += dt;
+    if (p.age > p.life) { fxp.splice(i, 1); continue; }
+    p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+  }
+}
+function drawFx() {
+  if (!fxp.length) return;
+  screenT();
+  for (const p of fxp) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, (p.life - p.age) / 0.6));
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+    ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/* ----- "Desktop View or Mobile View?" (first launch) ----- */
+function recommendedView() {
+  try {
+    if ((typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches) || Math.min(innerWidth, innerHeight) < 700) return 'mobile';
+  } catch (e) {}
+  return 'desktop';
+}
+function openPicker() {
+  pickOpen = true;
+  document.querySelectorAll('#viewpick .rec').forEach(n => n.remove());
+  const tag = document.createElement('span');
+  tag.className = 'rec'; tag.textContent = 'Recommended';
+  $(recommendedView() === 'mobile' ? '#pickMobile' : '#pickDesktop').appendChild(tag);
+  $('#viewpick').classList.add('show');
+}
+function chooseView(mode) {
+  save.settings.view = mode;
+  persist();
+  resizeCanvas();
+  pickOpen = false;
+  $('#viewpick').classList.remove('show');
+  renderSettings();
+}
+$('#pickDesktop').addEventListener('click', () => { SND.unlock(); chooseView('desktop'); });
+$('#pickMobile').addEventListener('click', () => { SND.unlock(); chooseView('mobile'); });
+
+/* ----- sound: unlock on the first tap, press sound on every button, pause music when the tab is hidden ----- */
+addEventListener('pointerdown', () => { if (!SND.unlocked) SND.unlock(); }, true);
+addEventListener('keydown', () => { if (!SND.unlocked) SND.unlock(); }, true);
+addEventListener('click', e => { const n = e.target; if (n && n.closest && n.closest('button')) SND.click(); }, true);
+addEventListener('visibilitychange', () => SND.syncMusic());
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('sel', t.dataset.tab === name));
+  document.querySelectorAll('.tabpane').forEach(p => { p.hidden = p.id !== 'tab-' + name; });
+}
+
+$('#tabs').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (t) showTab(t.dataset.tab);
+});
+$('#chapters').addEventListener('click', e => {
+  const b = e.target.closest('.chap');
+  if (b) { menuCh = Number(b.dataset.ch); renderLevels(); }
+});
+$('#levelgrid').addEventListener('click', e => {
+  const b = e.target.closest('.lvl');
+  if (b) startLevel(menuCh, Number(b.dataset.i));
+});
+$('#ballskins').addEventListener('click', e => {
+  const b = e.target.closest('.card');
+  if (b) tapSkin('ball', b.dataset.skin);
+});
+$('#colors').addEventListener('click', e => {
+  const b = e.target.closest('.card');
+  if (b) tapSkin('color', b.dataset.color);
+});
+function bindSettings(box) {
+  box.addEventListener('click', e => {
+    const a = e.target.closest('[data-action]');
+    if (a) {
+      if (a.dataset.action === 'terms') location.href = RICKROLL;
+      else if (a.dataset.action === 'reset') askReset();
+      return;
+    }
+    const b = e.target.closest('button[data-key]');
+    if (!b) return;
+    const key = b.dataset.key;
+    let v = b.dataset.val;
+    if (v === 'true') v = true;
+    else if (v === 'false') v = false;
+    else if (key === 'fps') v = Number(v);
+    changeSetting(key, v);
+  });
+  box.addEventListener('input', e => {                  // slider label follows your finger; the volume changes after "Making changes"
+    const r = e.target.closest('input[data-vol]');
+    if (r && r.nextElementSibling) r.nextElementSibling.textContent = r.value + '%';
+  });
+  box.addEventListener('change', e => {
+    const r = e.target.closest('input[data-vol]');
+    if (r) changeSetting(r.dataset.vol, Number(r.value));
+  });
+}
+bindSettings($('#settingsrows'));
+bindSettings($('#settingsrows2'));
+$('#resume').addEventListener('click', () => closeMenu());
+
+function openMenu() {
+  menuOpen = true;
+  pointerDown = false;
+  currentStroke = null;
+  menuCh = curCh;
+  renderLevels(); renderSkins(); renderSettings(); renderCoins();
+  $('#resume').textContent = 'Back to level';
+  $('#menu').classList.add('open');
+}
+function closeMenu() {
+  menuOpen = false;
+  $('#menu').classList.remove('open');
+}
+
+/* ----- drifting clouds behind the menu and loading screen ----- */
+function cloudsHtml() {
+  let h = '';
+  for (let i = 0; i < 7; i++) {
+    const dur = 60 + Math.random() * 60;
+    h += `<div class="cloud" style="top:${(4 + Math.random() * 62).toFixed(1)}%;animation-duration:${dur.toFixed(1)}s;animation-delay:${(-Math.random() * dur).toFixed(1)}s;scale:${(0.6 + Math.random() * 0.9).toFixed(2)}"></div>`;
+  }
+  return h;
+}
+
+/* ----- fake loading screen (3 seconds): 20% "Loading maps" -> 65% "Saving skins" -> 100% "Loading complete" ----- */
+function runLoader() {
+  const fill = $('#loadFill'), pct = $('#loadPct'), msg = $('#loadMsg'), box = $('#loader');
+  const t0 = Date.now();
+  const ease = x => 1 - Math.pow(1 - x, 3);
+  const part = (t, a, b, p0, p1) => t <= a ? p0 : t >= b ? p1 : p0 + (p1 - p0) * ease((t - a) / (b - a));
+  const timer = setInterval(() => {
+    const t = Date.now() - t0;
+    let p;
+    if (t < 1000) p = part(t, 0, 800, 0, 20);
+    else if (t < 2000) p = part(t, 1000, 1800, 20, 65);
+    else p = part(t, 2000, 2400, 65, 100);
+    fill.style.width = p + '%';
+    pct.textContent = Math.round(p) + '%';
+    msg.textContent = p >= 99.9 ? 'Loading complete' : (t < 1000 ? 'Loading maps' : 'Saving skins');
+    if (t >= 3000) {
+      clearInterval(timer);
+      box.classList.add('hide');
+      setTimeout(() => { box.style.display = 'none'; }, 300);
+      if (!save.settings.view) openPicker();
+    }
+  }, 30);
+}
+
+/* ---------------- main loop: fixed-step physics, frame-capped rendering ---------------- */
+let last = performance.now(), acc = 0, lastRender = 0;
+let fpsFrames = 0, fpsClock = 0;
+function frame(now) {
+  tNow = now;
+  const frameDt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+
+  const paused = menuOpen || overlayOpen || popupOpen || pickOpen;
+  if (!paused) {
+    acc += frameDt;
+    while (acc >= PHYS.step) { stepGame(); acc -= PHYS.step; }
+  } else {
+    acc = 0;
+  }
+  updateFx(frameDt);
+
+  // Frame-rate cap (physics above always runs at a fixed 240 Hz regardless)
+  const interval = save.settings.fps > 0 ? 1000 / save.settings.fps : 0;
+  if (now - lastRender >= interval - 0.5) {
+    lastRender = (now - lastRender > interval * 2) ? now : lastRender + interval;
+    if (!menuOpen) render();
+    fpsFrames++;
+  }
+  fpsClock += frameDt;
+  if (fpsClock >= 0.5) { fpsShown = Math.round(fpsFrames / fpsClock); fpsFrames = 0; fpsClock = 0; }
+
+  requestAnimationFrame(frame);
+}
+
+applyTheme();
+resizeCanvas();
+loadLevel(save.last[0] || 0, save.last[1] || 0, false);
+document.querySelectorAll('.sky').forEach(el => { el.innerHTML = cloudsHtml(); });
+checkRewards(false);
+renderLevels(); renderSkins(); renderSettings(); renderCoins();
+$('#resume').textContent = 'Play';
+render();
+runLoader();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
